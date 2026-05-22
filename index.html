@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rapid Consultancy — Gold Loan Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script src="js/main.js" defer></script>
+</head>
+<body>
+  <div id="view-landing" class="view landing-wrap">
+    <div class="top-accent"></div>
+    <nav class="landing-nav">
+      <div class="landing-nav-inner">
+        <div class="logo">
+          <div class="logo-mark">R</div>
+          <div>
+            <div>Rapid Consultancy</div>
+            <div class="logo-sub">GOLD LOAN MANAGEMENT</div>
+          </div>
+        </div>
+        <div class="landing-nav-links">
+          <a onclick="scrollTo2('features')">Features</a>
+          <a onclick="scrollTo2('how-it-works')">How it Works</a>
+          <a onclick="scrollTo2('calculator')">Calculator</a>
+          <a onclick="scrollTo2('faq')">FAQ</a>
+          <a onclick="scrollTo2('contact')">Contact</a>
+        </div>
+        <div class="landing-nav-cta">
+          <button class="btn btn-ghost btn-sm" onclick="switchView('view-login')">Sign In</button>
+          <button class="btn btn-primary btn-sm" onclick="scrollTo2('contact')">Get a Loan</button>
+        </div>
+      </div>
+    </nav>
+    <section class="hero">
+      <div>
+        <div class="hero-eyebrow">
+          <i data-lucide="shield-check"></i>
+          Trusted by 25,000+ customers across Telangana
+        </div>
+        <h1 class="hero-title">
+          Quick gold loans, <br>
+          <span class="accent">complete transparency.</span>
+        </h1>
+        <p class="hero-desc">
+          Get instant cash against your gold ornaments at competitive interest rates.
+          Manage your loans, track repayments, and stay informed — all in one secure portal.
+        </p>
+        <div class="hero-ctas">
+          <button class="btn btn-primary btn-lg" onclick="scrollTo2('contact')">
+            Apply at Nearest Branch <i data-lucide="arrow-right"></i>
+          </button>
+          <button class="btn btn-outline btn-lg" onclick="switchView('view-login')">
+            <i data-lucide="log-in"></i> Customer Login
+          </button>
+        </div>
+        <div class="hero-trust">
+          <div class="trust-item"><i data-lucide="badge-check"></i> RBI Compliant</div>
+          <div class="trust-item"><i data-lucide="lock"></i> Bank-Grade Security</div>
+          <div class="trust-item"><i data-lucide="clock"></i> Same-Day Disbursal</div>
+          <div class="trust-item"><i data-lucide="percent"></i> From 11% p.a.</div>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="hero-card">
+          <div class="hero-card-head">
+            <div>
+              <div class="hero-card-label">Loan Approved</div>
+              <div class="hero-card-amount">₹2,00,000</div>
+              <div class="hero-card-sub">Loan ID · RC-GL-2024-1043</div>
+            </div>
+            <span class="badge badge-active"><span class="badge-dot"></span>Active</span>
+          </div>
+          <div class="hero-grid-2">
+            <div class="hero-mini">
+              <div class="hero-mini-label">Gold Weight</div>
+              <div class="hero-mini-val">28.5g · 22K</div>
+            </div>
+            <div class="hero-mini">
+              <div class="hero-mini-label">Interest Rate</div>
+              <div class="hero-mini-val red">12% p.a.</div>
+            </div>
+          </div>
+        </div>
+        <div class="hero-grid-2">
+          <div class="hero-card" style="margin-bottom: 0;">
+            <div class="hero-card-label">Total Outstanding</div>
+            <div class="hero-card-amount" style="font-size: 22px;">₹1,85,000</div>
+            <div class="hero-card-sub">Next due: 28/05/2026</div>
+          </div>
+          <div class="hero-card" style="margin-bottom: 0;">
+            <div class="hero-card-label">Gold Value</div>
+            <div class="hero-card-amount" style="font-size: 22px;">₹2,28,000</div>
+            <div class="hero-card-sub">Updated daily</div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="stats-band">
+      <div class="stats-band-inner">
+        <div>
+          <div class="band-stat-num">25K+</div>
+          <div class="band-stat-label">Happy Customers</div>
+        </div>
+        <div>
+          <div class="band-stat-num">₹450 Cr+</div>
+          <div class="band-stat-label">Loans Disbursed</div>
+        </div>
+        <div>
+          <div class="band-stat-num">12</div>
+          <div class="band-stat-label">Branches in Telangana</div>
+        </div>
+        <div>
+          <div class="band-stat-num">15 min</div>
+          <div class="band-stat-label">Average Approval Time</div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="features">
+      <div class="section-inner">
+        <div class="section-eyebrow">Why Rapid Consultancy</div>
+        <h2 class="section-title">Built for trust and speed</h2>
+        <p class="section-subtitle">Everything you need to manage your gold loans — without the paperwork hassle.</p>
+        <div class="features">
+          <div class="feature">
+            <div class="feature-icon"><i data-lucide="zap"></i></div>
+            <div class="feature-title">Same-Day Disbursal</div>
+            <div class="feature-desc">Walk in with your gold, walk out with cash. Most approvals completed within 15 minutes of verification.</div>
+          </div>
+          <div class="feature">
+            <div class="feature-icon"><i data-lucide="percent"></i></div>
+            <div class="feature-title">Competitive Rates</div>
+            <div class="feature-desc">Interest rates starting from 11% per annum on simple interest. No hidden charges, no processing fees over 1%.</div>
+          </div>
+          <div class="feature">
+            <div class="feature-icon"><i data-lucide="shield"></i></div>
+            <div class="feature-title">Insured Vaults</div>
+            <div class="feature-desc">Your gold is stored in fully insured, bank-grade vaults under 24/7 CCTV with two-factor access.</div>
+          </div>
+          <div class="feature">
+            <div class="feature-icon"><i data-lucide="layout-dashboard"></i></div>
+            <div class="feature-title">Online Dashboard</div>
+            <div class="feature-desc">Track outstanding balance, view repayment history, and check interest accrued — anytime, anywhere.</div>
+          </div>
+          <div class="feature">
+            <div class="feature-icon"><i data-lucide="refresh-cw"></i></div>
+            <div class="feature-title">Easy Re-Pledge</div>
+            <div class="feature-desc">Need more time? Submit a re-pledge request online and renew your loan with minimal paperwork.</div>
+          </div>
+          <div class="feature">
+            <div class="feature-icon"><i data-lucide="users"></i></div>
+            <div class="feature-title">Branch Support</div>
+            <div class="feature-desc">A dedicated branch manager assigned to every customer for personalised assistance throughout your loan tenure.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="section section-light" id="how-it-works">
+      <div class="section-inner">
+        <div class="section-eyebrow">Simple Process</div>
+        <h2 class="section-title">How it works</h2>
+        <p class="section-subtitle">Get a gold loan in four straightforward steps.</p>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-title">Visit Branch</div>
+            <div class="step-desc">Walk into your nearest Rapid Consultancy branch with your gold ornaments and ID proof.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-title">Gold Valuation</div>
+            <div class="step-desc">Our certified appraisers assess the weight and purity of your gold on the spot.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-title">Approval & Sign</div>
+            <div class="step-desc">Receive loan offer, sign the agreement, and complete quick KYC verification.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-title">Get Cash + Portal Access</div>
+            <div class="step-desc">Receive funds in cash or bank transfer, plus credentials to manage your loan online.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="calculator">
+      <div class="section-inner">
+        <div class="section-eyebrow">Loan Calculator</div>
+        <h2 class="section-title">Estimate your loan amount</h2>
+        <p class="section-subtitle">A quick estimate based on current gold rates. Final amount confirmed at branch.</p>
+        <div class="calc-wrap">
+          <div class="calc-grid">
+            <div>
+              <div class="range-field">
+                <div class="range-head">
+                  <span class="range-label">Gold Weight</span>
+                  <span class="range-val" id="weight-val">25 g</span>
+                </div>
+                <input type="range" id="weight-range" min="1" max="200" value="25" oninput="calc()">
+              </div>
+              <div class="range-field">
+                <div class="range-head">
+                  <span class="range-label">Gold Purity</span>
+                  <span class="range-val" id="purity-val">22K</span>
+                </div>
+                <input type="range" id="purity-range" min="18" max="24" step="2" value="22" oninput="calc()">
+              </div>
+              <div class="range-field">
+                <div class="range-head">
+                  <span class="range-label">Tenure</span>
+                  <span class="range-val" id="tenure-val">12 months</span>
+                </div>
+                <input type="range" id="tenure-range" min="3" max="36" step="3" value="12" oninput="calc()">
+              </div>
+            </div>
+            <div class="calc-result">
+              <div class="calc-result-label">Estimated Loan Amount</div>
+              <div class="calc-result-val" id="calc-amount">₹1,57,500</div>
+              <div style="font-size: 12px; color: var(--text-muted);">At 12% p.a. simple interest</div>
+              <div class="calc-result-sub">
+                Total interest (12 mo): <strong style="color: var(--text);" id="calc-interest">₹18,900</strong><br>
+                Total payable: <strong style="color: var(--text);" id="calc-total">₹1,76,400</strong>
+              </div>
+              <button class="btn btn-primary btn-block" style="margin-top: 16px;" onclick="scrollTo2('contact')">
+                Apply at Branch <i data-lucide="arrow-right"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="section section-light">
+      <div class="section-inner">
+        <div class="section-eyebrow">Customer Stories</div>
+        <h2 class="section-title">What our customers say</h2>
+        <p class="section-subtitle">Real stories from real people across Telangana.</p>
+        <div class="testimonials">
+          <div class="testimonial">
+            <div class="test-stars">★★★★★</div>
+            <div class="test-quote">"Got my loan approved in under 20 minutes. The branch staff at Quthbullapur explained every detail. The online portal makes it so easy to check my balance."</div>
+            <div class="test-author">
+              <div class="test-avatar">PR</div>
+              <div>
+                <div class="test-name">Priya Reddy</div>
+                <div class="test-role">Small Business Owner · Hyderabad</div>
+              </div>
+            </div>
+          </div>
+          <div class="testimonial">
+            <div class="test-stars">★★★★★</div>
+            <div class="test-quote">"Took a loan against my mother's jewellery to expand my workshop. Interest rates were the lowest I could find in the area. Renewed twice without any hassle."</div>
+            <div class="test-author">
+              <div class="test-avatar">MK</div>
+              <div>
+                <div class="test-name">Mohammed Khan</div>
+                <div class="test-role">Tailor · Secunderabad</div>
+              </div>
+            </div>
+          </div>
+          <div class="testimonial">
+            <div class="test-stars">★★★★★</div>
+            <div class="test-quote">"What I appreciate most is the transparency. Every rupee paid, every gram of gold weight — it's all there in the portal. No surprises, no hidden fees."</div>
+            <div class="test-author">
+              <div class="test-avatar">SN</div>
+              <div>
+                <div class="test-name">Suresh Naidu</div>
+                <div class="test-role">Farmer · Medchal</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="faq">
+      <div class="section-inner">
+        <div class="section-eyebrow">Questions</div>
+        <h2 class="section-title">Frequently asked</h2>
+        <p class="section-subtitle">Everything you should know before applying for a gold loan.</p>
+        <div class="faq-list">
+          <div class="faq-item open" onclick="toggleFaq(this)">
+            <div class="faq-q">What documents do I need?<i data-lucide="chevron-down"></i></div>
+            <div class="faq-a">A government-issued photo ID (Aadhaar, PAN, Passport, or Voter ID), proof of address, and two passport-size photographs. That's it — no income proof required.</div>
+          </div>
+          <div class="faq-item" onclick="toggleFaq(this)">
+            <div class="faq-q">How is my gold valued?<i data-lucide="chevron-down"></i></div>
+            <div class="faq-a">Our certified appraisers weigh your gold and test its purity using non-destructive XRF analysis. Loan amount is up to 75% of the current market value of pure gold content.</div>
+          </div>
+          <div class="faq-item" onclick="toggleFaq(this)">
+            <div class="faq-q">Can I make repayments online?<i data-lucide="chevron-down"></i></div>
+            <div class="faq-a">Online payments are currently not available. All repayments are made at your assigned branch in person — this ensures every transaction is verified and recorded with a printed receipt.</div>
+          </div>
+          <div class="faq-item" onclick="toggleFaq(this)">
+            <div class="faq-q">What if I can't repay on time?<i data-lucide="chevron-down"></i></div>
+            <div class="faq-a">Contact your branch immediately. You can submit a re-pledge request through the online portal to extend your loan tenure, subject to gold revaluation and admin approval.</div>
+          </div>
+          <div class="faq-item" onclick="toggleFaq(this)">
+            <div class="faq-q">Is my gold safe?<i data-lucide="chevron-down"></i></div>
+            <div class="faq-a">Yes. All gold is stored in insured, climate-controlled vaults at the branch under 24/7 surveillance. Each item is tagged, sealed, and verifiable by the customer at any time.</div>
+          </div>
+          <div class="faq-item" onclick="toggleFaq(this)">
+            <div class="faq-q">How do I get portal access?<i data-lucide="chevron-down"></i></div>
+            <div class="faq-a">Customer accounts are created by the branch admin after your first loan is disbursed. You'll receive login credentials via SMS and email — sign in to track your loans anytime.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="cta-band" id="contact">
+      <h2>Ready to get started?</h2>
+      <p>Visit your nearest branch today or call us to learn more.</p>
+      <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+        <button class="btn btn-primary btn-lg">
+          <i data-lucide="phone"></i> +91 40 4123 5678
+        </button>
+        <button class="btn btn-outline btn-lg" style="color: var(--white); border-color: var(--white); background: transparent;" onclick="switchView('view-login')">
+          <i data-lucide="log-in"></i> Existing Customer? Sign In
+        </button>
+      </div>
+    </section>
+    <footer class="footer">
+      <div class="footer-inner">
+        <div class="footer-disclaimer">
+          <strong style="color: #BBB;">Disclaimer:</strong> Rapid Consultancy is a registered Non-Banking Financial Company providing loans against gold ornaments. Loans are subject to approval based on gold valuation and KYC verification. Interest rates and terms are subject to change. All transactions are governed by the loan agreement signed at the branch. This website does not facilitate online payments.
+        </div>
+        <div class="footer-grid">
+          <div>
+            <div class="footer-brand">
+              <div class="logo-mark">R</div>
+              Rapid Consultancy
+            </div>
+            <div class="footer-desc">
+              A trusted name in gold loans across Telangana since 2018. Helping families and small businesses unlock the value of their gold, safely and transparently.
+            </div>
+          </div>
+          <div class="footer-col">
+            <div class="footer-col-title">Product</div>
+            <ul>
+              <li><a onclick="scrollTo2('features')">Features</a></li>
+              <li><a onclick="scrollTo2('how-it-works')">How it Works</a></li>
+              <li><a onclick="scrollTo2('calculator')">Calculator</a></li>
+              <li><a onclick="switchView('view-login')">Customer Login</a></li>
+            </ul>
+          </div>
+          <div class="footer-col">
+            <div class="footer-col-title">Company</div>
+            <ul>
+              <li><a>About Us</a></li>
+              <li><a>Branch Locator</a></li>
+              <li><a>Careers</a></li>
+              <li><a>Press</a></li>
+            </ul>
+          </div>
+          <div class="footer-col">
+            <div class="footer-col-title">Legal</div>
+            <ul>
+              <li><a>Terms of Service</a></li>
+              <li><a>Privacy Policy</a></li>
+              <li><a>Grievance Redressal</a></li>
+              <li><a>Fair Practices Code</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <div>© 2026 Rapid Consultancy Pvt Ltd. All rights reserved.</div>
+          <div>Quthbullapur, Hyderabad, Telangana — 500055</div>
+        </div>
+      </div>
+    </footer>
+  </div>
+  <div id="view-login" class="view auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="logo-mark">R</div>
+        <div>
+          <div style="font-weight:700;font-size:16px;">Rapid Consultancy</div>
+          <div class="logo-sub">GOLD LOAN MANAGEMENT</div>
+        </div>
+      </div>
+      <h1 class="auth-title">Welcome back</h1>
+      <p class="auth-sub">Sign in to manage your gold loans</p>
+      <form onsubmit="event.preventDefault(); navigateTo('dashboard');">
+        <div class="field">
+          <label class="label">Mobile Number</label>
+          <div class="input-group">
+            <i data-lucide="phone"></i>
+            <input type="tel" class="input" placeholder="+91 98765 43210" value="+91 98765 43210" required />
+          </div>
+        </div>
+        <div class="field">
+          <label class="label">Password</label>
+          <div class="input-group">
+            <i data-lucide="lock"></i>
+            <input id="loginPwd" type="password" class="input" placeholder="Enter your password" value="••••••••" required />
+            <button type="button" class="toggle-pwd" onclick="togglePwd('loginPwd', this)">
+              <i data-lucide="eye"></i>
+            </button>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:18px;">
+          <a href="#" onclick="event.preventDefault(); switchView('view-forgot');" style="color:var(--primary);font-size:13px;font-weight:600;">Forgot Password?</a>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">
+          Sign In <i data-lucide="arrow-right"></i>
+        </button>
+      </form>
+      <div class="auth-foot">
+        Accounts are created by branch admin only. <br>
+        Contact your branch for access.
+        <div style="margin-top: 14px;">
+          <a href="#" onclick="event.preventDefault(); switchView('view-landing');">← Back to home</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="view-forgot" class="view auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="logo-mark">R</div>
+        <div>
+          <div style="font-weight:700;font-size:16px;">Rapid Consultancy</div>
+          <div class="logo-sub">GOLD LOAN MANAGEMENT</div>
+        </div>
+      </div>
+      <h1 class="auth-title">Forgot Password</h1>
+      <p class="auth-sub">Enter your registered email to receive a reset link</p>
+      <div id="forgot-form">
+        <div class="field">
+          <label class="label">Email Address</label>
+          <div class="input-group">
+            <i data-lucide="mail"></i>
+            <input type="email" class="input" placeholder="you@example.com" />
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="document.getElementById('forgot-form').style.display='none'; document.getElementById('forgot-success').style.display='block';">
+          Send Reset Link
+        </button>
+      </div>
+      <div id="forgot-success" style="display:none;text-align:center;">
+        <div style="width:48px;height:48px;border-radius:50%;background:var(--success-soft);color:var(--success);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+          <i data-lucide="check"></i>
+        </div>
+        <div style="font-weight:700;color:var(--text);margin-bottom:6px;">Reset link sent</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:18px;">Check your email inbox for the password reset link. Link expires in 30 minutes.</div>
+        <button class="btn btn-outline btn-block" onclick="switchView('view-reset');">View Reset Page (Demo)</button>
+      </div>
+      <div class="auth-foot">
+        <a href="#" onclick="event.preventDefault(); switchView('view-login');">← Back to login</a>
+      </div>
+    </div>
+  </div>
+  <div id="view-reset" class="view auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="logo-mark">R</div>
+        <div>
+          <div style="font-weight:700;font-size:16px;">Rapid Consultancy</div>
+          <div class="logo-sub">GOLD LOAN MANAGEMENT</div>
+        </div>
+      </div>
+      <h1 class="auth-title">Reset Password</h1>
+      <p class="auth-sub">Create a new password for your account</p>
+      <form onsubmit="event.preventDefault(); showToast('Password reset successfully', 'success'); switchView('view-login');">
+        <div class="field">
+          <label class="label">New Password</label>
+          <div class="input-group">
+            <i data-lucide="lock"></i>
+            <input id="newPwd" type="password" class="input" placeholder="Enter new password" oninput="checkPwdRules(this.value)" />
+            <button type="button" class="toggle-pwd" onclick="togglePwd('newPwd', this)"><i data-lucide="eye"></i></button>
+          </div>
+          <div class="pwd-rules" id="pwdRules">
+            <div class="pwd-rule" data-rule="len"><i data-lucide="circle"></i> At least 8 characters</div>
+            <div class="pwd-rule" data-rule="upper"><i data-lucide="circle"></i> One uppercase letter</div>
+            <div class="pwd-rule" data-rule="num"><i data-lucide="circle"></i> One number</div>
+            <div class="pwd-rule" data-rule="special"><i data-lucide="circle"></i> One special character</div>
+          </div>
+        </div>
+        <div class="field">
+          <label class="label">Confirm Password</label>
+          <div class="input-group">
+            <i data-lucide="lock"></i>
+            <input type="password" class="input" placeholder="Confirm new password" />
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Update Password</button>
+      </form>
+    </div>
+  </div>
+  <div id="view-app" class="view">
+    <div class="top-accent"></div>
+    <header class="header">
+      <div class="header-inner">
+        <div class="logo">
+          <div class="logo-mark">R</div>
+          <div>
+            <div>Rapid Consultancy</div>
+            <div class="logo-sub">GOLD LOAN MANAGEMENT</div>
+          </div>
+        </div>
+        <div class="header-right">
+          <div class="user-chip">
+            <div class="avatar">AS</div>
+            <div class="user-name">Arjun Sharma</div>
+          </div>
+          <button class="logout-btn" onclick="switchView('view-landing');">
+            <i data-lucide="log-out"></i>
+            <span>Logout</span>
+          </button>
+        </div>
+      </div>
+    </header>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="nav-section-label">Menu</div>
+        <div class="nav-item active" data-page="dashboard" onclick="navigateTo('dashboard')">
+          <i data-lucide="layout-dashboard"></i> Dashboard
+        </div>
+        <div class="nav-item" data-page="loans" onclick="navigateTo('loans')">
+          <i data-lucide="coins"></i> My Loans
+        </div>
+        <div class="nav-item" data-page="repledge" onclick="navigateTo('repledge')">
+          <i data-lucide="refresh-cw"></i> Re-Pledge
+        </div>
+        <div class="nav-item" data-page="profile" onclick="navigateTo('profile')">
+          <i data-lucide="user"></i> Profile
+        </div>
+        <div class="nav-divider"></div>
+        <div class="nav-section-label">Support</div>
+        <div class="nav-item">
+          <i data-lucide="phone"></i> Contact Branch
+        </div>
+        <div class="nav-item">
+          <i data-lucide="help-circle"></i> Help & FAQ
+        </div>
+      </aside>
+      <main>
+        <section id="page-dashboard" class="page active">
+          <div class="page-header">
+            <h1 class="page-title">Welcome back, Arjun</h1>
+            <p class="page-subtitle">Here's an overview of your gold loan portfolio</p>
+          </div>
+          <div class="stats-row">
+            <div class="stat-card">
+              <div class="stat-label">Active Loans</div>
+              <div class="stat-value">3</div>
+              <div class="stat-sub">1 closed this year</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Outstanding Amount</div>
+              <div class="stat-value">₹4,85,000</div>
+              <div class="stat-sub">Across 3 loans</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Interest Due</div>
+              <div class="stat-value">₹12,450</div>
+              <div class="stat-sub">As of today</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Nearest Due</div>
+              <div class="stat-value">28 May 2026</div>
+              <div class="stat-sub">In 8 days</div>
+            </div>
+          </div>
+          <div class="card" style="margin-bottom: 20px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+              <div class="card-title" style="margin-bottom:0;">
+                <i data-lucide="coins"></i> Active Loans
+              </div>
+              <span style="font-size:12px;color:var(--text-muted);">3 loans</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Loan ID</th>
+                    <th>Principal</th>
+                    <th>Outstanding</th>
+                    <th>Interest Due</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="loan-id">RC-GL-2024-1043</span></td>
+                    <td>₹2,00,000</td>
+                    <td>₹1,85,000</td>
+                    <td>₹5,200</td>
+                    <td>28/05/2026</td>
+                    <td><span class="badge badge-active"><span class="badge-dot"></span>Active</span></td>
+                    <td><button class="btn btn-outline btn-sm" onclick="navigateTo('loan-detail')">View Details</button></td>
+                  </tr>
+                  <tr>
+                    <td><span class="loan-id">RC-GL-2024-0987</span></td>
+                    <td>₹1,50,000</td>
+                    <td>₹1,50,000</td>
+                    <td>₹4,800</td>
+                    <td>15/05/2026</td>
+                    <td><span class="badge badge-overdue"><span class="badge-dot"></span>Overdue</span></td>
+                    <td><button class="btn btn-outline btn-sm" onclick="navigateTo('loan-detail')">View Details</button></td>
+                  </tr>
+                  <tr>
+                    <td><span class="loan-id">RC-GL-2025-1156</span></td>
+                    <td>₹1,50,000</td>
+                    <td>₹1,50,000</td>
+                    <td>₹2,450</td>
+                    <td>12/07/2026</td>
+                    <td><span class="badge badge-active"><span class="badge-dot"></span>Active</span></td>
+                    <td><button class="btn btn-outline btn-sm" onclick="navigateTo('loan-detail')">View Details</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="mobile-cards">
+              <div class="loan-mobile-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                  <span class="loan-id">RC-GL-2024-1043</span>
+                  <span class="badge badge-active"><span class="badge-dot"></span>Active</span>
+                </div>
+                <div class="lmc-row"><span class="lmc-label">Principal</span><span class="lmc-value">₹2,00,000</span></div>
+                <div class="lmc-row"><span class="lmc-label">Outstanding</span><span class="lmc-value">₹1,85,000</span></div>
+                <div class="lmc-row"><span class="lmc-label">Interest Due</span><span class="lmc-value">₹5,200</span></div>
+                <div class="lmc-row"><span class="lmc-label">Due Date</span><span class="lmc-value">28/05/2026</span></div>
+                <button class="btn btn-outline btn-block btn-sm" style="margin-top:10px;" onclick="navigateTo('loan-detail')">View Details</button>
+              </div>
+              <div class="loan-mobile-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                  <span class="loan-id">RC-GL-2024-0987</span>
+                  <span class="badge badge-overdue"><span class="badge-dot"></span>Overdue</span>
+                </div>
+                <div class="lmc-row"><span class="lmc-label">Principal</span><span class="lmc-value">₹1,50,000</span></div>
+                <div class="lmc-row"><span class="lmc-label">Outstanding</span><span class="lmc-value">₹1,50,000</span></div>
+                <div class="lmc-row"><span class="lmc-label">Interest Due</span><span class="lmc-value">₹4,800</span></div>
+                <div class="lmc-row"><span class="lmc-label">Due Date</span><span class="lmc-value">15/05/2026</span></div>
+                <button class="btn btn-outline btn-block btn-sm" style="margin-top:10px;" onclick="navigateTo('loan-detail')">View Details</button>
+              </div>
+              <div class="loan-mobile-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                  <span class="loan-id">RC-GL-2025-1156</span>
+                  <span class="badge badge-active"><span class="badge-dot"></span>Active</span>
+                </div>
+                <div class="lmc-row"><span class="lmc-label">Principal</span><span class="lmc-value">₹1,50,000</span></div>
+                <div class="lmc-row"><span class="lmc-label">Outstanding</span><span class="lmc-value">₹1,50,000</span></div>
+                <div class="lmc-row"><span class="lmc-label">Interest Due</span><span class="lmc-value">₹2,450</span></div>
+                <div class="lmc-row"><span class="lmc-label">Due Date</span><span class="lmc-value">12/07/2026</span></div>
+                <button class="btn btn-outline btn-block btn-sm" style="margin-top:10px;" onclick="navigateTo('loan-detail')">View Details</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title"><i data-lucide="map-pin"></i> Your Branch</div>
+            <div class="branch-info-card">
+              <div class="branch-icon-wrap">
+                <i data-lucide="building-2"></i>
+              </div>
+              <div style="flex:1;">
+                <div class="branch-name">Rapid Consultancy — Quthbullapur Branch</div>
+                <div class="branch-detail"><i data-lucide="map-pin"></i> Plot 14, Suchitra X Roads, Quthbullapur, Hyderabad — 500055</div>
+                <div class="branch-detail"><i data-lucide="phone"></i> +91 40 4123 5678</div>
+                <div class="branch-detail"><i data-lucide="clock"></i> Mon–Sat, 9:30 AM – 6:30 PM</div>
+                <div style="margin-top:10px;font-size:13px;color:var(--text-muted);">Your loan is managed at this branch. Please visit for repayments and physical verification.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section id="page-loans" class="page">
+          <div class="page-header">
+            <h1 class="page-title">My Loans</h1>
+            <p class="page-subtitle">All your active and past gold loans</p>
+          </div>
+          <div class="card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Loan ID</th>
+                    <th>Principal</th>
+                    <th>Outstanding</th>
+                    <th>Interest Rate</th>
+                    <th>Start Date</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="loan-id">RC-GL-2024-1043</span></td>
+                    <td>₹2,00,000</td>
+                    <td>₹1,85,000</td>
+                    <td>12% p.a.</td>
+                    <td>15/11/2024</td>
+                    <td><span class="badge badge-active"><span class="badge-dot"></span>Active</span></td>
+                    <td><button class="btn btn-outline btn-sm" onclick="navigateTo('loan-detail')">View</button></td>
+                  </tr>
+                  <tr>
+                    <td><span class="loan-id">RC-GL-2024-0987</span></td>
+                    <td>₹1,50,000</td>
+                    <td>₹1,50,000</td>
+                    <td>13.5% p.a.</td>
+                    <td>15/08/2024</td>
+                    <td><span class="badge badge-overdue"><span class="badge-dot"></span>Overdue</span></td>
+                    <td><button class="btn btn-outline btn-sm" onclick="navigateTo('loan-detail')">View</button></td>
+                  </tr>
+                  <tr>
+                    <td><span class="loan-id">RC-GL-2025-1156</span></td>
+                    <td>₹1,50,000</td>
+                    <td>₹1,50,000</td>
+                    <td>11.5% p.a.</td>
+                    <td>12/01/2026</td>
+                    <td><span class="badge badge-active"><span class="badge-dot"></span>Active</span></td>
+                    <td><button class="btn btn-outline btn-sm" onclick="navigateTo('loan-detail')">View</button></td>
+                  </tr>
+                  <tr>
+                    <td><span class="loan-id">RC-GL-2023-0455</span></td>
+                    <td>₹80,000</td>
+                    <td>₹0</td>
+                    <td>12% p.a.</td>
+                    <td>10/04/2023</td>
+                    <td><span class="badge badge-closed"><span class="badge-dot"></span>Closed</span></td>
+                    <td><button class="btn btn-outline btn-sm" onclick="navigateTo('loan-detail')">View</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+        <section id="page-loan-detail" class="page">
+          <a class="back-link" onclick="navigateTo('dashboard')"><i data-lucide="arrow-left"></i> Back to Dashboard</a>
+          <div class="page-header">
+            <h1 class="page-title">Loan Details</h1>
+            <p class="page-subtitle">Complete information about your gold loan</p>
+          </div>
+          <div class="card" style="margin-bottom: 16px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+              <div>
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">LOAN ID</div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span class="loan-id" style="font-size:16px;">RC-GL-2024-1043</span>
+                  <i data-lucide="copy" class="copy-btn" onclick="copy('RC-GL-2024-1043')" style="cursor:pointer;color:var(--text-light);width:14px;height:14px;"></i>
+                </div>
+              </div>
+              <span class="badge badge-active"><span class="badge-dot"></span>Active</span>
+            </div>
+            <div class="grid-2">
+              <div>
+                <div class="info-row"><span class="info-label">Principal Amount</span><span class="info-value info-value-lg">₹2,00,000</span></div>
+                <div class="info-row"><span class="info-label">Interest Rate</span><span class="info-value">12% per annum</span></div>
+                <div class="info-row"><span class="info-label">Outstanding Balance</span><span class="info-value">₹1,85,000</span></div>
+                <div class="info-row"><span class="info-label">Interest Accrued</span><span class="info-value">₹5,200</span></div>
+              </div>
+              <div>
+                <div class="info-row"><span class="info-label">Loan Start Date</span><span class="info-value">15/11/2024</span></div>
+                <div class="info-row"><span class="info-label">Loan Maturity Date</span><span class="info-value">15/11/2026</span></div>
+                <div class="info-row"><span class="info-label">Tenure</span><span class="info-value">24 months</span></div>
+                <div class="info-row"><span class="info-label">Next Due Date</span><span class="info-value">28/05/2026</span></div>
+              </div>
+            </div>
+            <div style="margin-top:14px;padding:10px 12px;background:#FAFAFA;border-radius:6px;font-size:12px;color:var(--text-muted);">
+              <strong style="color:var(--text);">Simple Interest:</strong> SI = (P × R × T) / 100 — calculated and updated by the system.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom: 16px;">
+            <div class="card-title"><i data-lucide="gem"></i> Gold Details</div>
+            <div class="grid-3">
+              <div>
+                <div class="info-label" style="margin-bottom:4px;">Gold Weight</div>
+                <div class="info-value info-value-lg">28.5 grams</div>
+              </div>
+              <div>
+                <div class="info-label" style="margin-bottom:4px;">Gold Purity</div>
+                <div class="info-value info-value-lg">22K</div>
+              </div>
+              <div>
+                <div class="info-label" style="margin-bottom:4px;">Estimated Value</div>
+                <div class="info-value info-value-lg">₹2,28,000</div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-bottom: 16px;">
+            <div class="card-title"><i data-lucide="indian-rupee"></i> Make a Repayment</div>
+            <div class="payment-summary">
+              <div class="pay-stat">
+                <div class="pay-stat-label">Outstanding</div>
+                <div class="pay-stat-value">₹1,85,000</div>
+              </div>
+              <div class="pay-stat">
+                <div class="pay-stat-label">Interest Due</div>
+                <div class="pay-stat-value">₹5,200</div>
+              </div>
+              <div class="pay-stat">
+                <div class="pay-stat-label">Total Payable</div>
+                <div class="pay-stat-value" style="color:var(--primary);">₹1,90,200</div>
+              </div>
+            </div>
+            <div class="payment-banner">
+              <i data-lucide="alert-circle" class="alert-icon"></i>
+              <div>
+                <div class="pb-title">Online payment is currently unavailable</div>
+                <div class="pb-text">
+                  Please visit your nearest branch to make a repayment. Our team will record the payment in person and provide a printed receipt.
+                </div>
+                <div class="branch-line">
+                  <i data-lucide="map-pin" style="width:13px;height:13px;display:inline;vertical-align:middle;"></i>
+                  Quthbullapur Branch · +91 40 4123 5678
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title"><i data-lucide="history"></i> Repayment History</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Amount Paid</th>
+                    <th>Payment Mode</th>
+                    <th>Recorded By</th>
+                    <th>Balance After</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>10/04/2026</td>
+                    <td>₹5,000</td>
+                    <td>Cash</td>
+                    <td>R. Kumar (Branch)</td>
+                    <td>₹1,85,000</td>
+                  </tr>
+                  <tr>
+                    <td>12/03/2026</td>
+                    <td>₹5,000</td>
+                    <td>Bank Transfer</td>
+                    <td>P. Reddy (Branch)</td>
+                    <td>₹1,90,000</td>
+                  </tr>
+                  <tr>
+                    <td>14/02/2026</td>
+                    <td>₹5,000</td>
+                    <td>Cash</td>
+                    <td>R. Kumar (Branch)</td>
+                    <td>₹1,95,000</td>
+                  </tr>
+                  <tr>
+                    <td>15/01/2026</td>
+                    <td>₹5,000</td>
+                    <td>Cash</td>
+                    <td>R. Kumar (Branch)</td>
+                    <td>₹2,00,000</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+        <section id="page-repledge" class="page">
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
+            <div>
+              <h1 class="page-title">Re-Pledge Requests</h1>
+              <p class="page-subtitle">Request to renew or re-pledge your gold loans</p>
+            </div>
+            <button class="btn btn-primary" onclick="openModal('modal-repledge')">
+              <i data-lucide="plus"></i> New Re-Pledge Request
+            </button>
+          </div>
+          <div class="card">
+            <div class="card-title"><i data-lucide="list"></i> Past Requests</div>
+            <div class="repledge-list">
+              <div class="repledge-item">
+                <div class="repledge-meta">
+                  <span class="repledge-id">REQ-2026-0042 · Loan RC-GL-2024-1043</span>
+                  <span class="repledge-reason">Need to extend tenure due to delayed business cycle</span>
+                  <span style="font-size:11px;color:var(--text-light);">Submitted 12/05/2026</span>
+                </div>
+                <span class="badge badge-pending"><span class="badge-dot"></span>Pending</span>
+              </div>
+              <div class="repledge-item">
+                <div class="repledge-meta">
+                  <span class="repledge-id">REQ-2026-0028 · Loan RC-GL-2024-0987</span>
+                  <span class="repledge-reason">Renewal requested at maturity</span>
+                  <span style="font-size:11px;color:var(--text-light);">Submitted 18/03/2026 · Approved 22/03/2026</span>
+                </div>
+                <span class="badge badge-approved"><span class="badge-dot"></span>Approved</span>
+              </div>
+              <div class="repledge-item">
+                <div class="repledge-meta">
+                  <span class="repledge-id">REQ-2025-0815 · Loan RC-GL-2023-0455</span>
+                  <span class="repledge-reason">Tenure extension</span>
+                  <span style="font-size:11px;color:var(--text-light);">Submitted 04/12/2025 · Rejected — gold revaluation required</span>
+                </div>
+                <span class="badge badge-rejected"><span class="badge-dot"></span>Rejected</span>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:16px;background:var(--primary-soft);border:1px solid var(--primary);">
+            <div style="display:flex;gap:12px;">
+              <i data-lucide="info" style="color:var(--primary);width:20px;height:20px;flex-shrink:0;margin-top:1px;"></i>
+              <div style="font-size:13px;color:var(--text-muted);line-height:1.6;">
+                <strong style="color:var(--text);">How re-pledge works:</strong> Submit a request online, and an admin will review it within 2 working days.
+                You'll need to visit the branch with your loan documents for physical verification of the gold.
+              </div>
+            </div>
+          </div>
+        </section>
+        <section id="page-profile" class="page">
+          <div class="page-header">
+            <h1 class="page-title">My Profile</h1>
+            <p class="page-subtitle">Manage your personal details and contact information</p>
+          </div>
+          <div class="card" style="margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+              <div class="card-title" style="margin-bottom:0;"><i data-lucide="user-circle"></i> Personal Information</div>
+              <button class="btn btn-outline btn-sm" id="editBtn" onclick="toggleEdit()"><i data-lucide="pencil"></i> Edit</button>
+              <div id="saveCancel" style="display:none;gap:8px;">
+                <button class="btn btn-ghost btn-sm" onclick="toggleEdit()">Cancel</button>
+                <button class="btn btn-primary btn-sm" onclick="toggleEdit(); showToast('Profile updated successfully', 'success');">Save Changes</button>
+              </div>
+            </div>
+            <div class="profile-grid">
+              <div class="field">
+                <label class="label">Full Name <span style="color:var(--text-light);font-weight:400;">(read-only)</span></label>
+                <div class="read-only-field">Arjun Sharma</div>
+              </div>
+              <div class="field">
+                <label class="label">Mobile Number <span style="color:var(--text-light);font-weight:400;">(read-only)</span></label>
+                <div class="read-only-field">+91 98765 43210</div>
+              </div>
+              <div class="field">
+                <label class="label">Email Address</label>
+                <div id="emailView" class="read-only-field">arjun.sharma@example.com</div>
+                <input id="emailEdit" type="email" class="input" value="arjun.sharma@example.com" style="display:none;" />
+              </div>
+              <div class="field">
+                <label class="label">Date of Birth <span style="color:var(--text-light);font-weight:400;">(read-only)</span></label>
+                <div class="read-only-field">14/06/1988</div>
+              </div>
+              <div class="field" style="grid-column: 1 / -1;">
+                <label class="label">Address</label>
+                <div id="addrView" class="read-only-field">Flat 302, Suchitra Residency, Quthbullapur, Hyderabad, Telangana — 500055</div>
+                <textarea id="addrEdit" class="textarea" style="display:none;">Flat 302, Suchitra Residency, Quthbullapur, Hyderabad, Telangana — 500055</textarea>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-title"><i data-lucide="shield-check"></i> Verification & Branch</div>
+            <div class="grid-2">
+              <div>
+                <div class="info-row">
+                  <span class="info-label">KYC Status</span>
+                  <span class="badge badge-verified"><span class="badge-dot"></span>Verified</span>
+                </div>
+                <div class="info-row"><span class="info-label">Customer ID</span><span class="info-value">RC-CUST-100214</span></div>
+                <div class="info-row"><span class="info-label">Member Since</span><span class="info-value">10/04/2023</span></div>
+              </div>
+              <div>
+                <div class="info-row"><span class="info-label">Branch Assigned</span><span class="info-value">Quthbullapur</span></div>
+                <div class="info-row"><span class="info-label">Branch Manager</span><span class="info-value">R. Kumar</span></div>
+                <div class="info-row"><span class="info-label">Branch Phone</span><span class="info-value">+91 40 4123 5678</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title"><i data-lucide="settings"></i> Account Security</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+              <div>
+                <div style="font-weight:600;">Password</div>
+                <div style="font-size:12px;color:var(--text-muted);">Last changed 3 months ago</div>
+              </div>
+              <button class="btn btn-outline btn-sm" onclick="switchView('view-reset');">Change Password</button>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;">
+              <div>
+                <div style="font-weight:600;">Sign Out</div>
+                <div style="font-size:12px;color:var(--text-muted);">Sign out from this device</div>
+              </div>
+              <button class="btn btn-outline btn-sm" onclick="switchView('view-landing');"><i data-lucide="log-out"></i> Logout</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <nav class="bottom-nav">
+      <div class="bottom-nav-inner">
+        <div class="bn-item active" data-page="dashboard" onclick="navigateTo('dashboard')">
+          <i data-lucide="layout-dashboard"></i>Dashboard
+        </div>
+        <div class="bn-item" data-page="loans" onclick="navigateTo('loans')">
+          <i data-lucide="coins"></i>Loans
+        </div>
+        <div class="bn-item" data-page="repledge" onclick="navigateTo('repledge')">
+          <i data-lucide="refresh-cw"></i>Re-Pledge
+        </div>
+        <div class="bn-item" data-page="profile" onclick="navigateTo('profile')">
+          <i data-lucide="user"></i>Profile
+        </div>
+      </div>
+    </nav>
+  </div>
+  <div class="modal-backdrop" id="modal-repledge">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">New Re-Pledge Request</div>
+        <span class="modal-close" onclick="closeModal('modal-repledge')"><i data-lucide="x"></i></span>
+      </div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
+        Submit a request to renew or re-pledge an existing loan. Our team will review and contact you.
+      </p>
+      <div class="field">
+        <label class="label">Select Loan</label>
+        <select class="select">
+          <option>RC-GL-2024-1043 — ₹2,00,000</option>
+          <option>RC-GL-2025-1156 — ₹1,50,000</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="label">Reason for Re-Pledge</label>
+        <textarea class="textarea" placeholder="Briefly explain why you're requesting a re-pledge..."></textarea>
+      </div>
+      <div class="field">
+        <label class="label">Additional Notes <span style="color:var(--text-light);font-weight:400;">(optional)</span></label>
+        <textarea class="textarea" placeholder="Anything else we should know?"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal('modal-repledge')">Cancel</button>
+        <button class="btn btn-primary" onclick="closeModal('modal-repledge'); showToast('Re-pledge request submitted. Please visit the branch for physical verification.', 'success');">Submit Request</button>
+      </div>
+    </div>
+  </div>
+  <div class="toast" id="toast">
+    <i data-lucide="check-circle-2"></i>
+    <span id="toast-msg">Saved successfully</span>
+  </div>
+</body>
+</html>
