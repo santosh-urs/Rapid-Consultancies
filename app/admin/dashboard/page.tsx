@@ -34,6 +34,7 @@ import {
   RefreshCw,
   XCircle,
   FileDown,
+  Camera,
 } from 'lucide-react';
 
 // Interfaces
@@ -48,6 +49,7 @@ interface Customer {
   branch: string;
   joinedDate: string;
   password?: string;
+  avatarUrl?: string;
 }
 
 interface Loan {
@@ -322,6 +324,7 @@ export default function AdminDashboardPage() {
   const [pdfCustomer, setPdfCustomer] = useState<Customer | null>(null);
   const [pdfCustomerLoans, setPdfCustomerLoans] = useState<Loan[]>([]);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [uploadingAvatarId, setUploadingAvatarId] = useState<string | null>(null);
 
   // Form States - Adjust Outstanding
   const [adjustAmount, setAdjustAmount] = useState(0);
@@ -498,6 +501,7 @@ export default function AdminDashboardPage() {
         id: c.id, name: c.name, mobile: c.mobile, email: c.email,
         address: c.address || '', dob: c.dob || '', kycStatus: c.kyc_status,
         branch: c.branch, joinedDate: c.joined_date, password: c.password || '',
+        avatarUrl: c.avatar_url || '',
       })).sort((a: any, b: any) => new Date(b.joinedDate).getTime() - new Date(a.joinedDate).getTime()));
 
       setLoans((loanRes.data || []).map((l: any) => {
@@ -2013,6 +2017,24 @@ export default function AdminDashboardPage() {
     </div>
   );
 
+  const handleUploadAvatar = async (customer: Customer, file: File) => {
+    setUploadingAvatarId(customer.id);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `${customer.id}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+      await supabase.from('customers').update({ avatar_url: publicUrl }).eq('id', customer.id);
+      setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, avatarUrl: publicUrl } : c));
+      toast({ title: 'Photo updated', description: `Profile photo set for ${customer.name}` });
+    } catch {
+      toast({ title: 'Upload failed', description: 'Could not upload photo. Check storage bucket.', variant: 'destructive' });
+    } finally {
+      setUploadingAvatarId(null);
+    }
+  };
+
   const renderCustomers = () => (
     <div className="space-y-4">
       {/* Header and Controls */}
@@ -2071,8 +2093,19 @@ export default function AdminDashboardPage() {
               {filteredCustomers.map((c) => (
                 <tr key={c.id} className="hover:bg-surface/30">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-semibold text-text">{c.name}</div>
-                    <div className="text-xs text-[#888888]">DOB: {c.dob || 'N/A'}</div>
+                    <div className="flex items-center gap-3">
+                      {c.avatarUrl ? (
+                        <img src={c.avatarUrl} alt={c.name} className="w-9 h-9 rounded-full object-cover border border-[#E5E5E5]" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-brand/10 flex items-center justify-center text-brand font-bold text-sm">
+                          {c.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <div className="font-semibold text-text">{c.name}</div>
+                        <div className="text-xs text-[#888888]">DOB: {c.dob || 'N/A'}</div>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-text text-sm">{c.mobile}</div>
@@ -2096,6 +2129,13 @@ export default function AdminDashboardPage() {
                       <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">Deleted</span>
                     ) : (
                       <div className="flex justify-end gap-2">
+                        <label className="cursor-pointer p-2 h-auto text-purple-600 hover:bg-purple-50 rounded-lg inline-flex items-center" title="Upload profile photo">
+                          {uploadingAvatarId === c.id
+                            ? <span className="h-4 w-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin inline-block" />
+                            : <Camera className="h-4 w-4" />
+                          }
+                          <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadAvatar(c, f); e.target.value = ''; }} />
+                        </label>
                         <Button variant="ghost" onClick={() => handleDownloadPdfClick(c)} className="p-2 h-auto text-emerald-600 hover:bg-emerald-50 rounded-lg" title="Download PDF">
                           <FileDown className="h-4 w-4" />
                         </Button>
