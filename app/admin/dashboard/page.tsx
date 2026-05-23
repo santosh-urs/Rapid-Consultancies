@@ -2027,9 +2027,9 @@ export default function AdminDashboardPage() {
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
       await supabase.from('customers').update({ avatar_url: publicUrl }).eq('id', customer.id);
       setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, avatarUrl: publicUrl } : c));
-      toast({ title: 'Photo updated', description: `Profile photo set for ${customer.name}` });
+      toast.push(`Profile photo updated for ${customer.name}`);
     } catch {
-      toast({ title: 'Upload failed', description: 'Could not upload photo. Check storage bucket.', variant: 'destructive' });
+      toast.push('Upload failed. Please check storage bucket settings.');
     } finally {
       setUploadingAvatarId(null);
     }
