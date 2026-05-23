@@ -1692,7 +1692,19 @@ export default function AdminDashboardPage() {
       if (isSupabaseConfigured) {
         let custId = req.customerId;
 
-        // Create customer account only if customerId is not already set (meaning it is a new customer request)
+        // If no customerId, look up by mobile first to avoid creating duplicates
+        if (!custId && req.customerMobile) {
+          const mobile = req.customerMobile.replace(/\D/g, '').slice(-10);
+          const { data: existing } = await supabase
+            .from('customers')
+            .select('id')
+            .ilike('mobile', `%${mobile}`)
+            .not('password', 'like', 'DELETED_%')
+            .maybeSingle();
+          if (existing) custId = existing.id;
+        }
+
+        // Create customer account only if no existing customer was found
         if (!custId) {
           custId = `cust-${Date.now()}`;
           const custPassword = req.customerMobile || req.customerName.replace(/\s+/g, '').toLowerCase();
