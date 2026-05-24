@@ -25,6 +25,7 @@ export interface LoanSummary {
   goldWeight: number;
   goldPurity: number;
   estimatedGoldValue: number;
+  goldImageUrl?: string;
   loanType: string;
   tenureMonths: number;
 }
@@ -166,6 +167,7 @@ export function useLoans() {
             goldWeight,
             goldPurity: Number(l.gold_purity),
             estimatedGoldValue: Number(l.estimated_gold_value),
+            goldImageUrl: l.gold_image_url || '',
             loanType,
             tenureMonths,
           };
@@ -251,6 +253,7 @@ export function useLoanDetail(loanId: string) {
             goldWeight,
             goldPurity: Number(l.gold_purity),
             estimatedGoldValue: Number(l.estimated_gold_value),
+            goldImageUrl: l.gold_image_url || '',
             loanType,
             tenureMonths,
             branch: l.branch,

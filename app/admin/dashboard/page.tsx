@@ -68,6 +68,7 @@ interface Loan {
   goldWeight: number;
   goldPurity: number;
   estimatedGoldValue: number;
+  goldImageUrl?: string;
   branch: string;
   loanType: string;
   tenureMonths: number;
@@ -287,6 +288,7 @@ export default function AdminDashboardPage() {
   const [isIssueLoanOpen, setIsIssueLoanOpen] = useState(false);
   const [isAdjustLoanOpen, setIsAdjustLoanOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+  const [uploadingGoldPhotoId, setUploadingGoldPhotoId] = useState<string | null>(null);
 
   // Form States - Customer
   const [custFormName, setCustFormName] = useState('');
@@ -533,6 +535,7 @@ export default function AdminDashboardPage() {
           goldWeight,
           goldPurity: Number(l.gold_purity),
           estimatedGoldValue: Number(l.estimated_gold_value),
+          goldImageUrl: l.gold_image_url || '',
           branch: l.branch,
           loanType,
           tenureMonths,
@@ -1071,6 +1074,27 @@ export default function AdminDashboardPage() {
       toast.push(`Failed to issue loan: ${err.message}`);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleUploadGoldPhoto = async (loan: Loan, file: File) => {
+    setUploadingGoldPhotoId(loan.id);
+    try {
+      const ext = file.name.split('.').pop() || 'jpg';
+      const path = `gold/${loan.id}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+      const { error: dbErr } = await supabase.from('loans').update({ gold_image_url: publicUrl }).eq('id', loan.id);
+      if (dbErr) throw dbErr;
+      setLoans(prev => prev.map(l => l.id === loan.id ? { ...l, goldImageUrl: publicUrl } : l));
+      setSelectedLoan(prev => prev?.id === loan.id ? { ...prev, goldImageUrl: publicUrl } : prev);
+      await addAuditLog('Gold Photo Uploaded', `Admin uploaded gold photo for loan ${loan.loanId}`);
+      toast.push(`Gold photo uploaded for loan ${loan.loanId}.`);
+    } catch (err: any) {
+      toast.push('Upload failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setUploadingGoldPhotoId(null);
     }
   };
 
@@ -4101,6 +4125,30 @@ export default function AdminDashboardPage() {
                   onChange={(e) => setAdjustDescription(e.target.value)}
                 />
               </div>
+
+              {/* Gold Photo Upload */}
+              {(selectedLoan.loanType === 'Gold Loan' || selectedLoan.goldWeight > 0) && (
+                <div className="pt-4 border-t border-[#E5E5E5]">
+                  <div className="text-xs font-bold uppercase tracking-wider text-[#888888] mb-3 flex items-center gap-2">
+                    Gold Collateral Photo
+                    {uploadingGoldPhotoId === selectedLoan.id && (
+                      <span className="h-3.5 w-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin inline-block" />
+                    )}
+                  </div>
+                  <div className="flex items-start gap-4">
+                    {selectedLoan.goldImageUrl ? (
+                      <img src={selectedLoan.goldImageUrl} alt="Gold" className="h-24 w-36 object-cover rounded-xl border border-amber-200 shrink-0" />
+                    ) : (
+                      <div className="h-24 w-36 rounded-xl border-2 border-dashed border-amber-200 bg-amber-50 flex items-center justify-center text-xs text-amber-500 font-medium shrink-0">No photo</div>
+                    )}
+                    <label className="cursor-pointer inline-flex items-center gap-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-4 py-2 transition-colors">
+                      {uploadingGoldPhotoId === selectedLoan.id ? 'Uploading…' : selectedLoan.goldImageUrl ? 'Replace Photo' : 'Upload Photo'}
+                      <input type="file" accept="image/*" className="hidden" disabled={uploadingGoldPhotoId !== null}
+                        onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadGoldPhoto(selectedLoan, f); e.target.value = ''; }} />
+                    </label>
+                  </div>
+                </div>
+              )}
 
               <div className="pt-4 border-t border-[#E5E5E5] flex justify-end gap-3">
                 <Button type="button" variant="outline" onClick={() => setIsAdjustLoanOpen(false)}>Cancel</Button>

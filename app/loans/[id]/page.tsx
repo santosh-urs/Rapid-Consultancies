@@ -119,7 +119,7 @@ export default function LoanDetailPage() {
                 <Shield size={16} className="text-brand" />
                 <span className="text-xs font-bold uppercase tracking-wider text-[#888888]">Gold Collateral</span>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-3 mb-4">
                 {[
                   { label: 'Gold Weight', value: `${data.goldWeight} grams` },
                   { label: 'Gold Purity', value: `${data.goldPurity} Karat` },
@@ -131,6 +131,16 @@ export default function LoanDetailPage() {
                   </div>
                 ))}
               </div>
+              {data.goldImageUrl && (
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-[#888888] mb-2">Gold Photo</div>
+                  <img
+                    src={data.goldImageUrl}
+                    alt="Gold collateral"
+                    className="w-full max-h-72 object-cover rounded-xl border border-amber-100"
+                  />
+                </div>
+              )}
             </div>
           )}
 
