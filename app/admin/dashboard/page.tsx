@@ -271,6 +271,7 @@ export default function AdminDashboardPage() {
   // Search States
   const [customerSearch, setCustomerSearch] = useState('');
   const [loanSearch, setLoanSearch] = useState('');
+  const [showClosedLoans, setShowClosedLoans] = useState(false);
   const [logSearch, setLogSearch] = useState('');
   const [staffSearch, setStaffSearch] = useState('');
   const [sanctionSearch, setSanctionSearch] = useState('');
@@ -781,12 +782,12 @@ export default function AdminDashboardPage() {
 
   const filteredLoans = useMemo(() => {
     return loans.filter(l =>
-      l.status !== 'closed' && (
+      (showClosedLoans ? true : l.status !== 'closed') && (
         l.loanId.toLowerCase().includes(loanSearch.toLowerCase()) ||
         l.customerName.toLowerCase().includes(loanSearch.toLowerCase())
       )
     );
-  }, [loans, loanSearch]);
+  }, [loans, loanSearch, showClosedLoans]);
 
   const filteredLogs = useMemo(() => {
     return auditLogs.filter(l =>
@@ -2215,6 +2216,12 @@ export default function AdminDashboardPage() {
           />
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={() => setShowClosedLoans(v => !v)}
+            className={`flex items-center gap-2 py-2.5 px-4 rounded-2xl text-sm font-semibold border transition-colors ${showClosedLoans ? 'bg-gray-100 border-gray-300 text-gray-700' : 'border-[#E5E5E5] hover:bg-surface text-text'}`}
+          >
+            {showClosedLoans ? 'Hide Closed' : 'Show Closed'}
+          </button>
           <Button
             variant="outline"
             onClick={handleAccrueInterest}
@@ -2804,6 +2811,9 @@ export default function AdminDashboardPage() {
     const others = closeRequests.filter(r => r.status !== 'pending');
     const sorted = [...pending, ...others];
 
+    const closedLoans = loans.filter(l => l.status === 'closed');
+    const closedLoanIdsWithRequest = new Set(closeRequests.filter(r => r.status === 'approved').map(r => r.loanId));
+
     const statusBadge = (s: string) => {
       const map: Record<string, string> = {
         pending: 'bg-amber-100 text-amber-700',
@@ -2817,10 +2827,56 @@ export default function AdminDashboardPage() {
 
     return (
       <div className="space-y-4">
+        {/* Closed Loans History */}
         <div className="rounded-3xl border border-[#E5E5E5] bg-white overflow-hidden shadow-sm">
           <div className="px-6 py-4 border-b border-[#E5E5E5] flex items-center justify-between">
             <div>
-              <h3 className="font-bold text-text">Loan Closure Requests</h3>
+              <h3 className="font-bold text-text">Closed Loans</h3>
+              <p className="text-xs text-[#888888] mt-0.5">All loans that have been fully settled and closed.</p>
+            </div>
+            <span className="inline-flex rounded-full bg-gray-100 text-gray-700 px-3 py-1 text-xs font-bold">{closedLoans.length} Closed</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-surface border-b border-[#E5E5E5]">
+                  {['Loan ID', 'Customer', 'Branch', 'Principal', 'Loan Type', 'Start Date', 'Maturity Date', 'Closure'].map(h => (
+                    <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[#888888]">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5E5E5]">
+                {closedLoans.length === 0 && (
+                  <tr><td colSpan={8} className="px-6 py-12 text-center text-sm text-[#888888]">No closed loans yet.</td></tr>
+                )}
+                {closedLoans.map(l => (
+                  <tr key={l.id} className="hover:bg-surface/40 bg-gray-50/30">
+                    <td className="px-5 py-3 font-bold font-mono text-text">{l.loanId}</td>
+                    <td className="px-5 py-3 text-text">{l.customerName}</td>
+                    <td className="px-5 py-3 text-[#555555]">{l.branch || '—'}</td>
+                    <td className="px-5 py-3 font-semibold text-text">₹{l.principal.toLocaleString('en-IN')}</td>
+                    <td className="px-5 py-3 text-[#555555]">{l.loanType}</td>
+                    <td className="px-5 py-3 text-[#888888] whitespace-nowrap text-xs">{l.startDate ? new Date(l.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
+                    <td className="px-5 py-3 text-[#888888] whitespace-nowrap text-xs">{l.maturityDate ? new Date(l.maturityDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
+                    <td className="px-5 py-3">
+                      {closedLoanIdsWithRequest.has(l.loanId) ? (
+                        <span className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700">Via Request</span>
+                      ) : (
+                        <span className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold bg-gray-100 text-gray-600">Direct</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Closure Requests from Staff */}
+        <div className="rounded-3xl border border-[#E5E5E5] bg-white overflow-hidden shadow-sm">
+          <div className="px-6 py-4 border-b border-[#E5E5E5] flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-text">Closure Requests from Staff</h3>
               <p className="text-xs text-[#888888] mt-0.5">Staff-submitted requests to close a loan. Approving marks the loan as Closed.</p>
             </div>
             {pendingCloseCount > 0 && (
@@ -2838,7 +2894,7 @@ export default function AdminDashboardPage() {
               </thead>
               <tbody className="divide-y divide-[#E5E5E5]">
                 {sorted.length === 0 && (
-                  <tr><td colSpan={7} className="px-6 py-12 text-center text-sm text-[#888888]">No closure requests yet.</td></tr>
+                  <tr><td colSpan={7} className="px-6 py-12 text-center text-sm text-[#888888]">No closure requests from staff yet.</td></tr>
                 )}
                 {sorted.map(req => (
                   <tr key={req.id} className={`hover:bg-surface/40 ${req.status === 'pending' ? 'bg-amber-50/30' : ''}`}>
