@@ -574,6 +574,26 @@ export default function Home() {
               <div className="footer-desc">
                 A trusted name in loan services across Telangana. Helping families and small businesses get the funds they need, safely and transparently.
               </div>
+              {/* Play Store badge */}
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: '0.7rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Download Our App</div>
+                <a
+                  href="https://play.google.com/store/apps/details?id=com.rapidconsultancy.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 10,
+                    background: '#1a1a1a', border: '1px solid #333',
+                    borderRadius: 10, padding: '8px 14px', textDecoration: 'none',
+                    color: '#fff', fontSize: '0.8rem', fontWeight: 600,
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3.18 23.76a2 2 0 0 0 2.07-.22l11.2-6.47-2.84-2.84-10.43 9.53ZM.69 1.07A2 2 0 0 0 0 2.62v18.76a2 2 0 0 0 .69 1.55l.08.07L10.6 12 .77 1a.5.5 0 0 0-.08.07Zm20.07 9.01-2.87-1.66-3.18 3.18 3.18 3.18 2.9-1.67a2 2 0 0 0 0-3.03Zm-17.72-7.1 10.44 9.53 2.84-2.84L4.12.73a2 2 0 0 0-1.08-.04Z" />
+                  </svg>
+                  Google Play
+                </a>
+              </div>
             </div>
             <div className="footer-col">
               <div className="footer-col-title">Product</div>
