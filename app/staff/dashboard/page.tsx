@@ -99,6 +99,8 @@ interface SanctionRequest {
   requestedDate: string;
   reviewedBy: string;
   adminNotes: string;
+  processingFee: number;
+  interestAmount: number;
 }
 
 const GOLD_RATES: Record<number, number> = {
@@ -154,6 +156,8 @@ const parseSanctionMeta = (notes: string) => ({
   businessName: (notes.match(/\[BUSI_NAME:([^\]]+)\]/) || [])[1] || '',
   businessType: (notes.match(/\[BUSI_TYPE:([^\]]+)\]/) || [])[1] || '',
   businessYears: (notes.match(/\[BUSI_YEARS:([^\]]+)\]/) || [])[1] || '',
+  processingFee: Number((notes.match(/\[PROC_FEE:([^\]]+)\]/) || [])[1] || '0'),
+  interestAmount: Number((notes.match(/\[INT_AMT:([^\]]+)\]/) || [])[1] || '0'),
   userNotes: notes
     .replace(/\[LOAN_TYPE:[^\]]+\]/g, '')
     .replace(/\[DUE_DATE:[^\]]+\]/g, '')
@@ -164,6 +168,8 @@ const parseSanctionMeta = (notes: string) => ({
     .replace(/\[BUSI_NAME:[^\]]+\]/g, '')
     .replace(/\[BUSI_TYPE:[^\]]+\]/g, '')
     .replace(/\[BUSI_YEARS:[^\]]+\]/g, '')
+    .replace(/\[PROC_FEE:[^\]]+\]/g, '')
+    .replace(/\[INT_AMT:[^\]]+\]/g, '')
     .trim(),
 });
 
@@ -171,7 +177,9 @@ const encodeSanctionNotes = (
   loanType: string, dueDate: string,
   mobile: string, email: string, dob: string, address: string,
   businessName: string, businessType: string, businessYears: string,
-  notes: string
+  notes: string,
+  processingFee?: number,
+  interestAmount?: number,
 ) => {
   let prefix = '';
   if (loanType) prefix += `[LOAN_TYPE:${loanType}]`;
@@ -183,6 +191,8 @@ const encodeSanctionNotes = (
   if (businessName) prefix += `[BUSI_NAME:${businessName}]`;
   if (businessType) prefix += `[BUSI_TYPE:${businessType}]`;
   if (businessYears) prefix += `[BUSI_YEARS:${businessYears}]`;
+  if (processingFee !== undefined) prefix += `[PROC_FEE:${processingFee}]`;
+  if (interestAmount !== undefined) prefix += `[INT_AMT:${interestAmount}]`;
   return prefix ? `${prefix} ${notes}`.trim() : notes;
 };
 
@@ -267,12 +277,21 @@ export default function StaffDashboardPage() {
   const [sanctionNotes, setSanctionNotes] = useState('');
   const [sanctionLoanType, setSanctionLoanType] = useState('Gold Loan');
   const [sanctionDueDate, setSanctionDueDate] = useState('');
+  const [sanctionProcessingFee, setSanctionProcessingFee] = useState(0);
+  const [sanctionInterestAmount, setSanctionInterestAmount] = useState(0);
+  const [isInterestAmountManuallyEdited, setIsInterestAmountManuallyEdited] = useState(false);
 
   useEffect(() => {
     if (!isEstimatedGoldValueManuallyEdited) {
       setSanctionEstimatedGoldValue(sanctionGoldWeight * sanctionGoldRate);
     }
   }, [sanctionGoldWeight, sanctionGoldRate, isEstimatedGoldValueManuallyEdited]);
+
+  useEffect(() => {
+    if (!isInterestAmountManuallyEdited) {
+      setSanctionInterestAmount(Math.round(sanctionPrincipal * (sanctionInterestRate / 100) * (sanctionTenure / 12)));
+    }
+  }, [sanctionPrincipal, sanctionInterestRate, sanctionTenure, isInterestAmountManuallyEdited]);
   // Business loan fields
   const [sanctionBusinessName, setSanctionBusinessName] = useState('');
   const [sanctionBusinessType, setSanctionBusinessType] = useState('');
@@ -809,7 +828,9 @@ export default function StaffDashboardPage() {
       sanctionLoanType, sanctionDueDate,
       sanctionCustMobile, sanctionCustEmail, sanctionCustDob, sanctionCustAddress,
       sanctionBusinessName, sanctionBusinessType, String(sanctionBusinessYears ?? ''),
-      sanctionNotes
+      sanctionNotes,
+      sanctionProcessingFee,
+      sanctionInterestAmount,
     );
     const custId = sanctionCustomerType === 'existing' && sanctionSelectedCustomerId ? sanctionSelectedCustomerId : '';
 
@@ -840,6 +861,8 @@ export default function StaffDashboardPage() {
       requestedDate: new Date().toISOString(),
       reviewedBy: '',
       adminNotes: '',
+      processingFee: sanctionProcessingFee,
+      interestAmount: sanctionInterestAmount,
     };
 
     try {
@@ -888,6 +911,9 @@ export default function StaffDashboardPage() {
       setSanctionBusinessName('');
       setSanctionBusinessType('');
       setSanctionBusinessYears('');
+      setSanctionProcessingFee(0);
+      setSanctionInterestAmount(0);
+      setIsInterestAmountManuallyEdited(false);
       setActiveTab('my-requests');
     } catch (err: any) {
       toast.push(`Failed to submit request: ${err.message}`);
@@ -1571,6 +1597,37 @@ export default function StaffDashboardPage() {
                 className="w-full rounded-2xl border border-[#E5E5E5] bg-white px-4 py-2.5 text-sm text-text focus:border-brand focus:ring-1 focus:ring-brand"
               />
             </div>
+          </div>
+
+          {/* Processing Fee & Interest */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-text">Processing Fee (₹)</label>
+              <Input
+                type="number"
+                value={sanctionProcessingFee}
+                onChange={e => setSanctionProcessingFee(Number(e.target.value))}
+                min={0}
+                step={1}
+                placeholder="e.g. 500"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-text">Interest Amount (₹)</label>
+              <Input
+                type="number"
+                value={sanctionInterestAmount}
+                onChange={e => { setSanctionInterestAmount(Number(e.target.value)); setIsInterestAmountManuallyEdited(true); }}
+                min={0}
+                step={1}
+                placeholder="e.g. 7500"
+              />
+              <p className="mt-1 text-[10px] text-[#888888]">Auto-calculated (principal × rate × tenure), editable.</p>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-[#E5E5E5] bg-surface px-4 py-3 flex items-center justify-between text-sm">
+            <span className="text-[#888888] font-medium">Outstanding Amount (₹)</span>
+            <span className="font-bold text-text text-base">₹{(sanctionPrincipal + sanctionProcessingFee).toLocaleString('en-IN')}</span>
           </div>
 
           {/* Live Valuation — gold loans only */}

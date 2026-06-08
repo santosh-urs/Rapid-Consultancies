@@ -135,6 +135,8 @@ interface SanctionRequest {
   requestedDate: string;
   reviewedBy: string;
   adminNotes: string;
+  processingFee: number;
+  interestAmount: number;
 }
 
 interface RepledgeRequest {
@@ -207,6 +209,8 @@ const parseSanctionMeta = (notes: string) => ({
   businessName: (notes.match(/\[BUSI_NAME:([^\]]+)\]/) || [])[1] || '',
   businessType: (notes.match(/\[BUSI_TYPE:([^\]]+)\]/) || [])[1] || '',
   businessYears: (notes.match(/\[BUSI_YEARS:([^\]]+)\]/) || [])[1] || '',
+  processingFee: Number((notes.match(/\[PROC_FEE:([^\]]+)\]/) || [])[1] || '0'),
+  interestAmount: Number((notes.match(/\[INT_AMT:([^\]]+)\]/) || [])[1] || '0'),
   userNotes: notes
     .replace(/\[LOAN_TYPE:[^\]]+\]/g, '')
     .replace(/\[DUE_DATE:[^\]]+\]/g, '')
@@ -217,6 +221,8 @@ const parseSanctionMeta = (notes: string) => ({
     .replace(/\[BUSI_NAME:[^\]]+\]/g, '')
     .replace(/\[BUSI_TYPE:[^\]]+\]/g, '')
     .replace(/\[BUSI_YEARS:[^\]]+\]/g, '')
+    .replace(/\[PROC_FEE:[^\]]+\]/g, '')
+    .replace(/\[INT_AMT:[^\]]+\]/g, '')
     .trim(),
 });
 
@@ -600,6 +606,8 @@ export default function AdminDashboardPage() {
             requestedDueDate: meta.dueDate, status: s.status,
             requestedDate: s.requested_date,
             reviewedBy: s.reviewed_by || '', adminNotes: s.admin_notes || '',
+            processingFee: meta.processingFee,
+            interestAmount: meta.interestAmount,
           };
         }));
       }
@@ -1699,7 +1707,7 @@ export default function AdminDashboardPage() {
       customerName: req.customerName,
       status: 'active',
       principal: req.principal,
-      outstanding: req.principal,
+      outstanding: req.principal + (req.processingFee || 0),
       interestDue: req.loanType === 'Weekly Loan' ? Math.round(req.principal * (req.interestRate / 100)) : 0,
       interestRate: req.interestRate,
       startDate: startDate.toISOString().split('T')[0],
@@ -4009,6 +4017,9 @@ export default function AdminDashboardPage() {
                 <p className="text-xs font-bold uppercase tracking-widest text-[#888888] mb-2">Loan Details</p>
                 {selectedSanction.loanType && <div className="flex justify-between"><span className="text-[#888888]">Loan Type:</span><span className="font-semibold text-brand">{selectedSanction.loanType}</span></div>}
                 <div className="flex justify-between"><span className="text-[#888888]">Principal:</span><span className="font-semibold">₹{selectedSanction.principal.toLocaleString('en-IN')}</span></div>
+                <div className="flex justify-between"><span className="text-[#888888]">Processing Fee:</span><span className="font-semibold">₹{(selectedSanction.processingFee || 0).toLocaleString('en-IN')}</span></div>
+                <div className="flex justify-between"><span className="text-[#888888]">Interest Amount:</span><span className="font-semibold">₹{(selectedSanction.interestAmount || 0).toLocaleString('en-IN')}</span></div>
+                <div className="flex justify-between border-t border-[#E5E5E5] pt-2 mt-1"><span className="text-[#888888] font-semibold">Outstanding Amount:</span><span className="font-bold text-text">₹{(selectedSanction.principal + (selectedSanction.processingFee || 0)).toLocaleString('en-IN')}</span></div>
                 <div className="flex justify-between"><span className="text-[#888888]">Interest Rate:</span><span className="font-semibold">{selectedSanction.interestRate}% p.a.</span></div>
                 <div className="flex justify-between"><span className="text-[#888888]">Tenure:</span><span className="font-semibold">{selectedSanction.tenureMonths} months</span></div>
                 {selectedSanction.requestedDueDate && <div className="flex justify-between"><span className="text-[#888888]">Requested Due Date:</span><span className="font-semibold">{selectedSanction.requestedDueDate}</span></div>}
