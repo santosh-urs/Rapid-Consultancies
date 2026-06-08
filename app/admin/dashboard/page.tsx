@@ -352,8 +352,10 @@ export default function AdminDashboardPage() {
         )
       : null;
     const processingFee = matchedSanction?.processingFee ?? 0;
-    const interestAmount = matchedSanction?.interestAmount
-      ?? (loan ? Math.round(loan.principal * (loan.interestRate / 100) * (loan.tenureMonths / 12)) : 0);
+    // If sanction has 0 interestAmount (old loan, feature not yet set), fall back to calculated value
+    const interestAmount = (matchedSanction?.interestAmount && matchedSanction.interestAmount > 0)
+      ? matchedSanction.interestAmount
+      : (loan ? Math.round(loan.principal * (loan.interestRate / 100) * (loan.tenureMonths / 12)) : 0);
 
     const row = (label: string, value: string, highlight = false) =>
       `<tr${highlight ? ' class="highlight"' : ''}>
@@ -369,7 +371,7 @@ export default function AdminDashboardPage() {
         ${row('Loan Type', loan.loanType)}
         ${row('Status', loan.status.charAt(0).toUpperCase() + loan.status.slice(1))}
         ${row('Principal Amount', `Rs. ${loan.principal.toLocaleString('en-IN')}`)}
-        ${processingFee > 0 ? row('Processing Fee', `Rs. ${processingFee.toLocaleString('en-IN')}`) : ''}
+        ${row('Processing Fee', processingFee > 0 ? `Rs. ${processingFee.toLocaleString('en-IN')}` : 'Nil')}
         ${row('Outstanding Balance', `Rs. ${loan.outstanding.toLocaleString('en-IN')}`)}
         ${row('Interest Amount (Estimated)', `Rs. ${interestAmount.toLocaleString('en-IN')}`)}
         ${row('Interest Due (Accrued)', `Rs. ${loan.interestDue.toLocaleString('en-IN')}`)}
