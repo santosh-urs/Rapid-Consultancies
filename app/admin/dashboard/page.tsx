@@ -343,117 +343,114 @@ export default function AdminDashboardPage() {
   const [adjustDescription, setAdjustDescription] = useState('');
 
   const generateCustomerPdf = async (customer: Customer, loan: Loan | null) => {
-    const { default: jsPDF } = await import('jspdf');
-    const { default: autoTable } = await import('jspdf-autotable');
+    // Look up processing fee and interest amount from approved sanction requests
+    const matchedSanction = loan
+      ? sanctionRequests.find(
+          s => s.status === 'approved' &&
+            (s.customerId === customer.id || s.customerName === customer.name) &&
+            s.principal === loan.principal
+        )
+      : null;
+    const processingFee = matchedSanction?.processingFee ?? 0;
+    const interestAmount = matchedSanction?.interestAmount
+      ?? (loan ? Math.round(loan.principal * (loan.interestRate / 100) * (loan.tenureMonths / 12)) : 0);
 
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pageW = doc.internal.pageSize.getWidth();
+    const row = (label: string, value: string, highlight = false) =>
+      `<tr>
+        <td style="font-weight:600;width:45%;padding:7px 10px;border:1px solid #ddd;background:#f9f9f9;color:#555;">${label}</td>
+        <td style="padding:7px 10px;border:1px solid #ddd;${highlight ? 'font-weight:700;color:#b40000;' : ''}">${value}</td>
+      </tr>`;
 
-    // ── Header ──────────────────────────────────────────────────────────────
-    doc.setFillColor(180, 0, 0);
-    doc.rect(0, 0, pageW, 32, 'F');
+    const loanSection = loan ? `
+      <h3 style="font-size:13px;font-weight:700;color:#282828;margin:20px 0 4px;">Loan Details</h3>
+      <hr style="border:none;border-top:2px solid #b40000;margin-bottom:8px;"/>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        ${row('Loan ID', loan.loanId)}
+        ${row('Loan Type', loan.loanType)}
+        ${row('Status', loan.status.charAt(0).toUpperCase() + loan.status.slice(1))}
+        ${row('Principal Amount', `Rs. ${loan.principal.toLocaleString('en-IN')}`)}
+        ${processingFee > 0 ? row('Processing Fee', `Rs. ${processingFee.toLocaleString('en-IN')}`) : ''}
+        ${row('Outstanding Balance', `Rs. ${loan.outstanding.toLocaleString('en-IN')}`)}
+        ${row('Interest Amount (Estimated)', `Rs. ${interestAmount.toLocaleString('en-IN')}`)}
+        ${row('Interest Due (Accrued)', `Rs. ${loan.interestDue.toLocaleString('en-IN')}`)}
+        ${row('Total Due', `Rs. ${(loan.outstanding + loan.interestDue).toLocaleString('en-IN')}`, true)}
+        ${row('Interest Rate', `${loan.interestRate}% p.a.`)}
+        ${row('Tenure', `${loan.tenureMonths} months`)}
+        ${row('Start Date', loan.startDate || 'N/A')}
+        ${row('Maturity Date', loan.maturityDate || 'N/A')}
+        ${row('Next Due Date', loan.nextDueDate || 'N/A')}
+        ${(loan.loanType === 'Gold Loan' || loan.goldWeight > 0) ? `
+          ${row('Gold Weight', `${loan.goldWeight} g`)}
+          ${row('Gold Purity', `${loan.goldPurity}K`)}
+          ${row('Est. Gold Value', `Rs. ${loan.estimatedGoldValue?.toLocaleString('en-IN') || 'N/A'}`)}
+        ` : ''}
+      </table>
+    ` : '';
 
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'bold');
-    doc.text('RAPID CONSULTANCY', pageW / 2, 14, { align: 'center' });
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text('rapidconsultancy124@gmail.com  |  +91 7670870964', pageW / 2, 22, { align: 'center' });
-
-    doc.setDrawColor(255, 255, 255);
-    doc.setLineWidth(0.3);
-    doc.line(14, 27, pageW - 14, 27);
-
-    doc.setFontSize(10);
-    doc.text('Customer Statement', pageW / 2, 30, { align: 'center' });
-
-    // ── Customer Details ─────────────────────────────────────────────────────
-    doc.setTextColor(40, 40, 40);
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Customer Information', 14, 42);
-
-    doc.setDrawColor(180, 0, 0);
-    doc.setLineWidth(0.5);
-    doc.line(14, 44, pageW - 14, 44);
-
-    autoTable(doc, {
-      startY: 46,
-      theme: 'grid',
-      styles: { fontSize: 9, cellPadding: 3, textColor: [40, 40, 40] },
-      headStyles: { fillColor: [245, 245, 245], textColor: [100, 100, 100], fontStyle: 'bold' },
-      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 } },
-      body: [
-        ['Name', customer.name],
-        ['Date of Birth', customer.dob || 'N/A'],
-        ['Mobile', customer.mobile],
-        ['Email', customer.email],
-        ['Address', customer.address || 'N/A'],
-        ['Branch', customer.branch],
-        ['KYC Status', customer.kycStatus],
-        ['Joined Date', customer.joinedDate],
-      ],
-    });
-
-    // ── Loan Details ─────────────────────────────────────────────────────────
-    if (loan) {
-      const afterCustY = (doc as any).lastAutoTable.finalY + 8;
-
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(40, 40, 40);
-      doc.text('Loan Details', 14, afterCustY);
-
-      doc.setDrawColor(180, 0, 0);
-      doc.setLineWidth(0.5);
-      doc.line(14, afterCustY + 2, pageW - 14, afterCustY + 2);
-
-      autoTable(doc, {
-        startY: afterCustY + 4,
-        theme: 'grid',
-        styles: { fontSize: 9, cellPadding: 3, textColor: [40, 40, 40] },
-        headStyles: { fillColor: [245, 245, 245], textColor: [100, 100, 100], fontStyle: 'bold' },
-        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 } },
-        body: [
-          ['Loan ID', loan.loanId],
-          ['Loan Type', loan.loanType],
-          ['Status', loan.status.charAt(0).toUpperCase() + loan.status.slice(1)],
-          ['Principal Amount', `Rs. ${loan.principal.toLocaleString('en-IN')}`],
-          ['Outstanding Balance', `Rs. ${loan.outstanding.toLocaleString('en-IN')}`],
-          ['Interest Due', `Rs. ${loan.interestDue.toLocaleString('en-IN')}`],
-          ['Total Due', `Rs. ${(loan.outstanding + loan.interestDue).toLocaleString('en-IN')}`],
-          ['Interest Rate', `${loan.interestRate}% p.a.`],
-          ['Tenure', `${loan.tenureMonths} months`],
-          ['Start Date', loan.startDate || 'N/A'],
-          ['Maturity Date', loan.maturityDate || 'N/A'],
-          ['Next Due Date', loan.nextDueDate || 'N/A'],
-          ...(loan.loanType === 'Gold Loan' || loan.goldWeight > 0
-            ? [
-                ['Gold Weight', `${loan.goldWeight} g`],
-                ['Gold Purity', `${loan.goldPurity}K`],
-                ['Est. Gold Value', `Rs. ${loan.estimatedGoldValue?.toLocaleString('en-IN') || 'N/A'}`],
-              ]
-            : []),
-        ],
-      });
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Customer Statement – ${customer.name}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&family=Noto+Sans+Telugu:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Noto Sans', 'Noto Sans Telugu', Arial, sans-serif; color: #282828; background: #fff; padding: 0; }
+    @media print {
+      body { padding: 0; }
+      .no-print { display: none; }
+      @page { margin: 10mm; }
     }
+    .header { background: #b40000; color: #fff; text-align: center; padding: 18px 16px 14px; }
+    .header h1 { font-size: 22px; font-weight: 700; letter-spacing: 1px; }
+    .header p { font-size: 10px; margin-top: 4px; opacity: 0.9; }
+    .header hr { border: none; border-top: 1px solid rgba(255,255,255,0.5); margin: 8px 0 6px; }
+    .header .subtitle { font-size: 11px; }
+    .content { padding: 20px 24px 60px; max-width: 700px; margin: 0 auto; }
+    h3 { font-size: 13px; font-weight: 700; color: #282828; margin: 20px 0 4px; }
+    hr.section { border: none; border-top: 2px solid #b40000; margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    td { padding: 7px 10px; border: 1px solid #ddd; }
+    td:first-child { font-weight: 600; width: 45%; background: #f9f9f9; color: #555; }
+    .highlight { font-weight: 700; color: #b40000; }
+    .footer { text-align: center; font-size: 9px; color: #999; margin-top: 32px; border-top: 1px solid #eee; padding-top: 10px; }
+    .print-btn { display: block; margin: 20px auto; padding: 10px 28px; background: #b40000; color: #fff; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; font-family: inherit; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>RAPID CONSULTANCY</h1>
+    <p>rapidconsultancy124@gmail.com &nbsp;|&nbsp; +91 7670870964</p>
+    <hr/>
+    <span class="subtitle">Customer Statement</span>
+  </div>
+  <div class="content">
+    <button class="print-btn no-print" onclick="window.print()">Print / Save as PDF</button>
+    <h3>Customer Information</h3>
+    <hr class="section"/>
+    <table>
+      ${row('Name', customer.name)}
+      ${row('Date of Birth', customer.dob || 'N/A')}
+      ${row('Mobile', customer.mobile)}
+      ${row('Email', customer.email)}
+      ${row('Address', customer.address || 'N/A')}
+      ${row('Branch', customer.branch)}
+      ${row('KYC Status', customer.kycStatus)}
+      ${row('Joined Date', customer.joinedDate)}
+    </table>
+    ${loanSection}
+    <div class="footer">
+      Generated on ${new Date().toLocaleString('en-IN')} &nbsp;|&nbsp; Rapid Consultancy &nbsp;|&nbsp; rapidconsultancy124@gmail.com
+    </div>
+  </div>
+</body>
+</html>`;
 
-    // ── Footer ───────────────────────────────────────────────────────────────
-    const pageH = doc.internal.pageSize.getHeight();
-    doc.setFontSize(7.5);
-    doc.setTextColor(140, 140, 140);
-    doc.setFont('helvetica', 'normal');
-    doc.text(
-      `Generated on ${new Date().toLocaleString('en-IN')}  |  Rapid Consultancy  |  rapidconsultancy124@gmail.com`,
-      pageW / 2,
-      pageH - 8,
-      { align: 'center' },
-    );
-
-    const safeFileName = customer.name.replace(/[^a-z0-9]/gi, '_');
-    doc.save(`${safeFileName}_${loan ? loan.loanId : 'profile'}.pdf`);
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(html);
+    printWindow.document.close();
   };
 
   const handleDownloadPdfClick = (customer: Customer) => {
