@@ -356,9 +356,9 @@ export default function AdminDashboardPage() {
       ?? (loan ? Math.round(loan.principal * (loan.interestRate / 100) * (loan.tenureMonths / 12)) : 0);
 
     const row = (label: string, value: string, highlight = false) =>
-      `<tr>
-        <td style="font-weight:600;width:45%;padding:7px 10px;border:1px solid #ddd;background:#f9f9f9;color:#555;">${label}</td>
-        <td style="padding:7px 10px;border:1px solid #ddd;${highlight ? 'font-weight:700;color:#b40000;' : ''}">${value}</td>
+      `<tr${highlight ? ' class="highlight"' : ''}>
+        <td>${label}</td>
+        <td>${value}</td>
       </tr>`;
 
     const loanSection = loan ? `
@@ -395,25 +395,25 @@ export default function AdminDashboardPage() {
   <title>Customer Statement – ${customer.name}</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&family=Noto+Sans+Telugu:wght@400;600;700&display=swap" rel="stylesheet"/>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body { font-family: 'Noto Sans', 'Noto Sans Telugu', Arial, sans-serif; color: #282828; background: #fff; padding: 0; }
     @media print {
       body { padding: 0; }
-      .no-print { display: none; }
-      @page { margin: 10mm; }
+      .no-print { display: none !important; }
+      @page { margin: 10mm; size: A4; }
     }
-    .header { background: #b40000; color: #fff; text-align: center; padding: 18px 16px 14px; }
-    .header h1 { font-size: 22px; font-weight: 700; letter-spacing: 1px; }
-    .header p { font-size: 10px; margin-top: 4px; opacity: 0.9; }
+    .header { background: #b40000 !important; color: #fff !important; text-align: center; padding: 18px 16px 14px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .header h1 { font-size: 22px; font-weight: 700; letter-spacing: 1px; color: #fff !important; }
+    .header p { font-size: 10px; margin-top: 4px; opacity: 0.9; color: #fff !important; }
     .header hr { border: none; border-top: 1px solid rgba(255,255,255,0.5); margin: 8px 0 6px; }
-    .header .subtitle { font-size: 11px; }
+    .header .subtitle { font-size: 11px; color: #fff !important; }
     .content { padding: 20px 24px 60px; max-width: 700px; margin: 0 auto; }
     h3 { font-size: 13px; font-weight: 700; color: #282828; margin: 20px 0 4px; }
-    hr.section { border: none; border-top: 2px solid #b40000; margin-bottom: 8px; }
+    hr.section { border: none; border-top: 2px solid #b40000 !important; margin-bottom: 8px; }
     table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    td { padding: 7px 10px; border: 1px solid #ddd; }
-    td:first-child { font-weight: 600; width: 45%; background: #f9f9f9; color: #555; }
-    .highlight { font-weight: 700; color: #b40000; }
+    td { padding: 7px 10px; border: 1px solid #ddd !important; }
+    td:first-child { font-weight: 600; width: 45%; background: #f9f9f9 !important; color: #555 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .highlight td:last-child { font-weight: 700; color: #b40000 !important; }
     .footer { text-align: center; font-size: 9px; color: #999; margin-top: 32px; border-top: 1px solid #eee; padding-top: 10px; }
     .print-btn { display: block; margin: 20px auto; padding: 10px 28px; background: #b40000; color: #fff; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; font-family: inherit; }
   </style>
