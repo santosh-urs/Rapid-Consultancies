@@ -18,8 +18,11 @@ CREATE TABLE IF NOT EXISTS customers (
     kyc_status TEXT DEFAULT 'Pending' CHECK (kyc_status IN ('Verified', 'Pending', 'Rejected')),
     branch TEXT DEFAULT 'Musthafa Nagar Branch',
     joined_date DATE DEFAULT CURRENT_DATE,
-    password TEXT DEFAULT 'Cust@123'
+    password TEXT DEFAULT 'Cust@123',
+    processing_fee NUMERIC DEFAULT 0
 );
+-- Migration for existing databases:
+-- ALTER TABLE customers ADD COLUMN IF NOT EXISTS processing_fee NUMERIC DEFAULT 0;
 
 -- 2. Loans Table
 CREATE TABLE IF NOT EXISTS loans (

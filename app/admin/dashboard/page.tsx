@@ -50,6 +50,7 @@ interface Customer {
   joinedDate: string;
   password?: string;
   avatarUrl?: string;
+  processingFee?: number;
 }
 
 interface Loan {
@@ -306,6 +307,8 @@ export default function AdminDashboardPage() {
   const [custFormKyc, setCustFormKyc] = useState<'Verified' | 'Pending' | 'Rejected'>('Verified');
   const [custFormBranch, setCustFormBranch] = useState('Musthafa Nagar Branch');
   const [custFormPassword, setCustFormPassword] = useState('Cust@123');
+  const [custFormJoinedDate, setCustFormJoinedDate] = useState('');
+  const [custFormProcessingFee, setCustFormProcessingFee] = useState(0);
 
   // Form States - Loan
   const [loanFormCustomerId, setLoanFormCustomerId] = useState('');
@@ -343,7 +346,7 @@ export default function AdminDashboardPage() {
   const [adjustDescription, setAdjustDescription] = useState('');
 
   const generateCustomerPdf = async (customer: Customer, loan: Loan | null) => {
-    // Look up processing fee and interest amount from approved sanction requests
+    // Use customer-level processing fee (editable by admin); fall back to sanction request lookup
     const matchedSanction = loan
       ? sanctionRequests.find(
           s => s.status === 'approved' &&
@@ -351,8 +354,10 @@ export default function AdminDashboardPage() {
             s.principal === loan.principal
         )
       : null;
-    const processingFee = matchedSanction?.processingFee ?? 0;
-    // If sanction has 0 interestAmount (old loan, feature not yet set), fall back to calculated value
+    const processingFee = (customer.processingFee && customer.processingFee > 0)
+      ? customer.processingFee
+      : (matchedSanction?.processingFee ?? 0);
+    // If sanction has 0 interestAmount (old loan), fall back to calculated value
     const interestAmount = (matchedSanction?.interestAmount && matchedSanction.interestAmount > 0)
       ? matchedSanction.interestAmount
       : (loan ? Math.round(loan.principal * (loan.interestRate / 100) * (loan.tenureMonths / 12)) : 0);
@@ -439,7 +444,8 @@ export default function AdminDashboardPage() {
       ${row('Address', customer.address || 'N/A')}
       ${row('Branch', customer.branch)}
       ${row('KYC Status', customer.kycStatus)}
-      ${row('Joined Date', customer.joinedDate)}
+      ${row('Joined Date', customer.joinedDate || 'N/A')}
+      ${processingFee > 0 ? row('Processing Fee', `Rs. ${processingFee.toLocaleString('en-IN')}`) : ''}
     </table>
     ${loanSection}
     <div class="footer">
@@ -509,7 +515,7 @@ export default function AdminDashboardPage() {
         id: c.id, name: c.name, mobile: c.mobile, email: c.email,
         address: c.address || '', dob: c.dob || '', kycStatus: c.kyc_status,
         branch: c.branch, joinedDate: c.joined_date, password: c.password || '',
-        avatarUrl: c.avatar_url || '',
+        avatarUrl: c.avatar_url || '', processingFee: Number(c.processing_fee ?? 0),
       })).sort((a: any, b: any) => new Date(b.joinedDate).getTime() - new Date(a.joinedDate).getTime()));
 
       setLoans((loanRes.data || []).map((l: any) => {
@@ -880,6 +886,8 @@ export default function AdminDashboardPage() {
     setCustFormKyc(c.kycStatus);
     setCustFormBranch(c.branch);
     setCustFormPassword(c.password || 'Cust@123');
+    setCustFormJoinedDate(c.joinedDate || '');
+    setCustFormProcessingFee(c.processingFee ?? 0);
     setIsEditCustomerOpen(true);
   };
 
@@ -899,6 +907,8 @@ export default function AdminDashboardPage() {
           kyc_status: custFormKyc,
           branch: custFormBranch,
           password: custFormPassword,
+          joined_date: custFormJoinedDate || null,
+          processing_fee: custFormProcessingFee,
         }).eq('id', selectedCustomer.id);
         if (error) throw error;
       }
@@ -915,6 +925,8 @@ export default function AdminDashboardPage() {
             kycStatus: custFormKyc,
             branch: custFormBranch,
             password: custFormPassword,
+            joinedDate: custFormJoinedDate,
+            processingFee: custFormProcessingFee,
           };
         }
         return c;
@@ -1798,7 +1810,7 @@ export default function AdminDashboardPage() {
             id: c.id, name: c.name, mobile: c.mobile, email: c.email,
             address: c.address || '', dob: c.dob || '',
             kycStatus: c.kyc_status, branch: c.branch, joinedDate: c.joined_date,
-            password: c.password || '',
+            password: c.password || '', processingFee: Number(c.processing_fee ?? 0),
           })));
         }
       }
@@ -1903,6 +1915,8 @@ export default function AdminDashboardPage() {
     setCustFormDob('');
     setCustFormKyc('Verified');
     setCustFormPassword('Cust@123');
+    setCustFormJoinedDate('');
+    setCustFormProcessingFee(0);
   };
 
   const resetLoanForm = () => {
@@ -3713,6 +3727,28 @@ export default function AdminDashboardPage() {
                   <Input
                     value={custFormBranch}
                     onChange={(e) => setCustFormBranch(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">Joining Date</label>
+                  <Input
+                    type="date"
+                    value={custFormJoinedDate}
+                    onChange={(e) => setCustFormJoinedDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">Processing Fee (₹)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    placeholder="e.g. 500"
+                    value={custFormProcessingFee}
+                    onChange={(e) => setCustFormProcessingFee(Number(e.target.value))}
                   />
                 </div>
               </div>
