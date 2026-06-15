@@ -309,6 +309,7 @@ export default function AdminDashboardPage() {
   const [custFormPassword, setCustFormPassword] = useState('Cust@123');
   const [custFormJoinedDate, setCustFormJoinedDate] = useState('');
   const [custFormProcessingFee, setCustFormProcessingFee] = useState(0);
+  const [custFormInterestRate, setCustFormInterestRate] = useState<number | ''>('');
 
   // Form States - Loan
   const [loanFormCustomerId, setLoanFormCustomerId] = useState('');
@@ -888,6 +889,8 @@ export default function AdminDashboardPage() {
     setCustFormPassword(c.password || 'Cust@123');
     setCustFormJoinedDate(c.joinedDate || '');
     setCustFormProcessingFee(c.processingFee ?? 0);
+    const activeLoan = loans.find(l => l.customerId === c.id && (l.status === 'active' || l.status === 'overdue'));
+    setCustFormInterestRate(activeLoan ? activeLoan.interestRate : '');
     setIsEditCustomerOpen(true);
   };
 
@@ -911,6 +914,15 @@ export default function AdminDashboardPage() {
           processing_fee: custFormProcessingFee,
         }).eq('id', selectedCustomer.id);
         if (error) throw error;
+
+        if (custFormInterestRate !== '') {
+          const { error: loanErr } = await supabase
+            .from('loans')
+            .update({ interest_rate: Number(custFormInterestRate) })
+            .eq('customer_id', selectedCustomer.id)
+            .in('status', ['active', 'overdue']);
+          if (loanErr) throw loanErr;
+        }
       }
 
       const updated = customers.map(c => {
@@ -933,7 +945,15 @@ export default function AdminDashboardPage() {
       });
       setCustomers(updated);
 
-      await addAuditLog('Customer Updated', `Updated profile of customer ${custFormName}`);
+      if (custFormInterestRate !== '') {
+        setLoans(prev => prev.map(l =>
+          l.customerId === selectedCustomer.id && (l.status === 'active' || l.status === 'overdue')
+            ? { ...l, interestRate: Number(custFormInterestRate) }
+            : l
+        ));
+      }
+
+      await addAuditLog('Customer Updated', `Updated profile of customer ${custFormName}${custFormInterestRate !== '' ? ` — interest rate set to ${custFormInterestRate}%` : ''}`);
       toast.push(`Customer profile updated successfully.`);
       setIsEditCustomerOpen(false);
       resetCustomerForm();
@@ -1917,6 +1937,7 @@ export default function AdminDashboardPage() {
     setCustFormPassword('Cust@123');
     setCustFormJoinedDate('');
     setCustFormProcessingFee(0);
+    setCustFormInterestRate('');
   };
 
   const resetLoanForm = () => {
@@ -3751,6 +3772,20 @@ export default function AdminDashboardPage() {
                     onChange={(e) => setCustFormProcessingFee(Number(e.target.value))}
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">Interest Rate (%)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.01}
+                  placeholder={custFormInterestRate === '' ? 'No active loan' : 'e.g. 9.5'}
+                  value={custFormInterestRate}
+                  onChange={(e) => setCustFormInterestRate(e.target.value === '' ? '' : Number(e.target.value))}
+                />
+                <p className="text-xs text-[#888888] mt-1">Updates the interest rate on this customer's active loan(s).</p>
               </div>
 
               <div className="pt-4 border-t border-[#E5E5E5] flex justify-end gap-3">

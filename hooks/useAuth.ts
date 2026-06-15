@@ -162,7 +162,12 @@ export function useAuth() {
         ? await custQuery.ilike('email', identifier.trim())
         : await custQuery.ilike('mobile', `%${inputClean}`);
 
-      if (matches.length === 0) {
+      if (error) {
+        console.error('Supabase customer lookup error:', error);
+        throw new Error('Database connection failed. Please try again.');
+      }
+
+      if (!matches || matches.length === 0) {
         throw new Error('Account not found');
       }
 
