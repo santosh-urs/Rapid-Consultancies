@@ -310,6 +310,7 @@ export default function AdminDashboardPage() {
   const [custFormJoinedDate, setCustFormJoinedDate] = useState('');
   const [custFormProcessingFee, setCustFormProcessingFee] = useState(0);
   const [custFormInterestRate, setCustFormInterestRate] = useState<number | ''>('');
+  const [custFormInterestAmount, setCustFormInterestAmount] = useState(0);
 
   // Form States - Loan
   const [loanFormCustomerId, setLoanFormCustomerId] = useState('');
@@ -536,11 +537,7 @@ export default function AdminDashboardPage() {
           status: l.status,
           principal: Number(l.principal),
           outstanding: Number(l.outstanding),
-          interestDue: calculateDynamicInterest({
-            ...l,
-            loanType,
-            tenureMonths,
-          }),
+          interestDue: Number(l.interest_due || 0),
           interestRate: Number(l.interest_rate),
           nextDueDate: l.next_due_date || '',
           startDate: l.start_date,
@@ -891,6 +888,7 @@ export default function AdminDashboardPage() {
     setCustFormProcessingFee(c.processingFee ?? 0);
     const activeLoan = loans.find(l => l.customerId === c.id && (l.status === 'active' || l.status === 'overdue'));
     setCustFormInterestRate(activeLoan ? activeLoan.interestRate : '');
+    setCustFormInterestAmount(activeLoan ? activeLoan.interestDue : 0);
     setIsEditCustomerOpen(true);
   };
 
@@ -915,14 +913,14 @@ export default function AdminDashboardPage() {
         }).eq('id', selectedCustomer.id);
         if (error) throw error;
 
-        if (custFormInterestRate !== '') {
-          const { error: loanErr } = await supabase
-            .from('loans')
-            .update({ interest_rate: Number(custFormInterestRate) })
-            .eq('customer_id', selectedCustomer.id)
-            .in('status', ['active', 'overdue']);
-          if (loanErr) throw loanErr;
-        }
+        const loanUpdates: Record<string, any> = { interest_due: custFormInterestAmount };
+        if (custFormInterestRate !== '') loanUpdates.interest_rate = Number(custFormInterestRate);
+        const { error: loanErr } = await supabase
+          .from('loans')
+          .update(loanUpdates)
+          .eq('customer_id', selectedCustomer.id)
+          .in('status', ['active', 'overdue']);
+        if (loanErr) throw loanErr;
       }
 
       const updated = customers.map(c => {
@@ -945,15 +943,18 @@ export default function AdminDashboardPage() {
       });
       setCustomers(updated);
 
-      if (custFormInterestRate !== '') {
-        setLoans(prev => prev.map(l =>
-          l.customerId === selectedCustomer.id && (l.status === 'active' || l.status === 'overdue')
-            ? { ...l, interestRate: Number(custFormInterestRate) }
-            : l
-        ));
-      }
+      setLoans(prev => prev.map(l =>
+        l.customerId === selectedCustomer.id && (l.status === 'active' || l.status === 'overdue')
+          ? {
+              ...l,
+              interestDue: custFormInterestAmount,
+              interestRate: custFormInterestRate !== '' ? Number(custFormInterestRate) : l.interestRate,
+            }
+          : l
+      ));
 
-      await addAuditLog('Customer Updated', `Updated profile of customer ${custFormName}${custFormInterestRate !== '' ? ` — interest rate set to ${custFormInterestRate}%` : ''}`);
+      const rateNote = custFormInterestRate !== '' ? ` | Rate: ${custFormInterestRate}%` : '';
+      await addAuditLog('Customer Updated', `Updated profile of customer ${custFormName} | Interest Amount: ₹${custFormInterestAmount}${rateNote}`);
       toast.push(`Customer profile updated successfully.`);
       setIsEditCustomerOpen(false);
       resetCustomerForm();
@@ -1064,7 +1065,15 @@ export default function AdminDashboardPage() {
       status: 'active',
       principal: loanFormPrincipal,
       outstanding: loanFormPrincipal,
-      interestDue: loanFormLoanType === 'Weekly Loan' ? Math.round(loanFormPrincipal * (loanFormInterestRate / 100)) : 0,
+      interestDue: calculateDynamicInterest({
+        principal: loanFormPrincipal,
+        interestRate: loanFormInterestRate,
+        startDate: startDate.toISOString().split('T')[0],
+        nextDueDate: nextDueDateStr,
+        loanType: loanFormLoanType,
+        tenureMonths: Number(loanFormTenure),
+        status: 'active',
+      }),
       interestRate: loanFormInterestRate,
       startDate: startDate.toISOString().split('T')[0],
       maturityDate: maturityDate.toISOString().split('T')[0],
@@ -1739,7 +1748,15 @@ export default function AdminDashboardPage() {
       status: 'active',
       principal: req.principal,
       outstanding: req.principal + (req.processingFee || 0),
-      interestDue: req.loanType === 'Weekly Loan' ? Math.round(req.principal * (req.interestRate / 100)) : 0,
+      interestDue: calculateDynamicInterest({
+        principal: req.principal,
+        interestRate: req.interestRate,
+        startDate: startDate.toISOString().split('T')[0],
+        nextDueDate: sanctionNextDue,
+        loanType: req.loanType || 'Gold Loan',
+        tenureMonths: req.tenureMonths || 6,
+        status: 'active',
+      }),
       interestRate: req.interestRate,
       startDate: startDate.toISOString().split('T')[0],
       maturityDate: maturityDate.toISOString().split('T')[0],
@@ -1938,6 +1955,7 @@ export default function AdminDashboardPage() {
     setCustFormJoinedDate('');
     setCustFormProcessingFee(0);
     setCustFormInterestRate('');
+    setCustFormInterestAmount(0);
   };
 
   const resetLoanForm = () => {
@@ -3774,18 +3792,32 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">Interest Rate (%)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.01}
-                  placeholder={custFormInterestRate === '' ? 'No active loan' : 'e.g. 9.5'}
-                  value={custFormInterestRate}
-                  onChange={(e) => setCustFormInterestRate(e.target.value === '' ? '' : Number(e.target.value))}
-                />
-                <p className="text-xs text-[#888888] mt-1">Updates the interest rate on this customer's active loan(s).</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">Interest Rate (%)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.01}
+                    placeholder={custFormInterestRate === '' ? 'No active loan' : 'e.g. 9.5'}
+                    value={custFormInterestRate}
+                    onChange={(e) => setCustFormInterestRate(e.target.value === '' ? '' : Number(e.target.value))}
+                  />
+                  <p className="text-xs text-[#888888] mt-1">Annual rate on active loan(s).</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">Interest Amount (₹)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    placeholder="e.g. 1500"
+                    value={custFormInterestAmount}
+                    onChange={(e) => setCustFormInterestAmount(Number(e.target.value))}
+                  />
+                  <p className="text-xs text-[#888888] mt-1">Accrued interest due now.</p>
+                </div>
               </div>
 
               <div className="pt-4 border-t border-[#E5E5E5] flex justify-end gap-3">
