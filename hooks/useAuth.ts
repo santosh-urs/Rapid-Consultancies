@@ -108,7 +108,6 @@ export function useAuth() {
       throw new Error('Invalid credentials');
     }
 
-    const isEmail = identifier.includes('@');
     let authenticatedUser: User;
 
     if (role === 'admin') {
@@ -127,68 +126,45 @@ export function useAuth() {
         role: 'admin',
       };
     } else if (role === 'staff') {
-      const inputClean = identifier.replace(/\D/g, '');
-      const query = supabase.from('staff').select('*').eq('is_active', true);
-      const { data: staffRows, error } = isEmail
-        ? await query.ilike('email', identifier.trim())
-        : await query.ilike('mobile', `%${inputClean}`);
+      const { data, error } = await supabase.rpc('verify_staff_login', {
+        p_identifier: identifier,
+        p_password: password,
+      });
 
       if (error) {
-        console.error('Supabase staff lookup error:', error);
+        console.error('Staff login RPC error:', error);
         throw new Error('Database connection failed. Please try again.');
       }
 
-      const staffMember = staffRows?.[0] ?? null;
-
-      if (!staffMember) {
-        throw new Error('Staff member not found');
-      }
-
-      if (staffMember.password !== password) {
-        throw new Error('Invalid password');
-      }
+      if (data?.status === 'not_found') throw new Error('Staff member not found');
+      if (data?.status !== 'ok') throw new Error('Invalid password');
 
       authenticatedUser = {
-        id: staffMember.id,
-        name: staffMember.name,
-        mobile: staffMember.mobile,
+        id: data.id,
+        name: data.name,
+        mobile: data.mobile,
         role: 'staff',
-        branch: staffMember.branch,
+        branch: data.branch,
       };
     } else {
-      const inputClean = identifier.replace(/\D/g, '');
-      const custQuery = supabase.from('customers').select('*');
-      const { data: matches, error } = isEmail
-        ? await custQuery.ilike('email', identifier.trim())
-        : await custQuery.ilike('mobile', `%${inputClean}`);
+      const { data, error } = await supabase.rpc('verify_customer_login', {
+        p_identifier: identifier,
+        p_password: password,
+      });
 
       if (error) {
-        console.error('Supabase customer lookup error:', error);
+        console.error('Customer login RPC error:', error);
         throw new Error('Database connection failed. Please try again.');
       }
 
-      if (!matches || matches.length === 0) {
-        throw new Error('Account not found');
-      }
-
-      const customer = matches.find((c: any) => c.password && c.password === password);
-
-      if (customer && customer.password && customer.password.startsWith('DELETED_')) {
-        throw new Error('This account has been deleted.');
-      }
-
-      if (!customer) {
-        const deletedCust = matches.find((c: any) => c.password && c.password.startsWith('DELETED_') && c.password.substring(8) === password);
-        if (deletedCust) {
-          throw new Error('This account has been deleted.');
-        }
-        throw new Error('Invalid password');
-      }
+      if (data?.status === 'not_found') throw new Error('Account not found');
+      if (data?.status === 'deleted') throw new Error('This account has been deleted.');
+      if (data?.status !== 'ok') throw new Error('Invalid password');
 
       authenticatedUser = {
-        id: customer.id,
-        name: customer.name,
-        mobile: customer.mobile,
+        id: data.id,
+        name: data.name,
+        mobile: data.mobile,
         role: 'user',
       };
     }

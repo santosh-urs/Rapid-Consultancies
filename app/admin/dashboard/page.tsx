@@ -883,7 +883,7 @@ export default function AdminDashboardPage() {
     setCustFormDob(c.dob);
     setCustFormKyc(c.kycStatus);
     setCustFormBranch(c.branch);
-    setCustFormPassword(c.password || 'Cust@123');
+    setCustFormPassword('');
     setCustFormJoinedDate(c.joinedDate || '');
     setCustFormProcessingFee(c.processingFee ?? 0);
     const activeLoan = loans.find(l => l.customerId === c.id && (l.status === 'active' || l.status === 'overdue'));
@@ -899,7 +899,7 @@ export default function AdminDashboardPage() {
 
     try {
       if (isSupabaseConfigured) {
-        const { error } = await supabase.from('customers').update({
+        const custUpdate: Record<string, any> = {
           name: custFormName,
           mobile: custFormMobile,
           email: custFormEmail,
@@ -907,10 +907,11 @@ export default function AdminDashboardPage() {
           dob: custFormDob || null,
           kyc_status: custFormKyc,
           branch: custFormBranch,
-          password: custFormPassword,
           joined_date: custFormJoinedDate || null,
           processing_fee: custFormProcessingFee,
-        }).eq('id', selectedCustomer.id);
+        };
+        if (custFormPassword.trim()) custUpdate.password = custFormPassword.trim();
+        const { error } = await supabase.from('customers').update(custUpdate).eq('id', selectedCustomer.id);
         if (error) throw error;
 
         const loanUpdates: Record<string, any> = { interest_due: custFormInterestAmount };
@@ -934,7 +935,7 @@ export default function AdminDashboardPage() {
             dob: custFormDob,
             kycStatus: custFormKyc,
             branch: custFormBranch,
-            password: custFormPassword,
+            password: custFormPassword.trim() ? custFormPassword.trim() : c.password,
             joinedDate: custFormJoinedDate,
             processingFee: custFormProcessingFee,
           };
@@ -1664,16 +1665,17 @@ export default function AdminDashboardPage() {
     setIsLoading(true);
     try {
       if (isSupabaseConfigured) {
-        const { error } = await supabase.from('staff').update({
+        const staffUpdate: Record<string, any> = {
           name: staffFormName,
           email: staffFormEmail,
-          password: staffFormPassword,
           branch: staffFormBranch,
-        }).eq('id', selectedStaff.id);
+        };
+        if (staffFormPassword.trim()) staffUpdate.password = staffFormPassword.trim();
+        const { error } = await supabase.from('staff').update(staffUpdate).eq('id', selectedStaff.id);
         if (error) throw error;
       }
       setStaffList(prev => prev.map(s => s.id === selectedStaff.id
-        ? { ...s, name: staffFormName, email: staffFormEmail, password: staffFormPassword, branch: staffFormBranch }
+        ? { ...s, name: staffFormName, email: staffFormEmail, password: staffFormPassword.trim() ? staffFormPassword.trim() : s.password, branch: staffFormBranch }
         : s
       ));
       await addAuditLog('Staff Updated', `Admin updated profile of staff ${staffFormName}`);
@@ -2569,7 +2571,7 @@ export default function AdminDashboardPage() {
                         setStaffFormName(s.name);
                         setStaffFormMobile(s.mobile);
                         setStaffFormEmail(s.email);
-                        setStaffFormPassword(s.password);
+                        setStaffFormPassword('');
                         setStaffFormBranch(s.branch);
                         setIsEditStaffOpen(true);
                       }}>
@@ -3728,10 +3730,10 @@ export default function AdminDashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">Password</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">New Password</label>
                   <Input
                     type="password"
-                    placeholder="Enter password"
+                    placeholder="Leave blank to keep current password"
                     value={custFormPassword}
                     onChange={(e) => setCustFormPassword(e.target.value)}
                   />
@@ -4078,8 +4080,8 @@ export default function AdminDashboardPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">Password</label>
-                  <Input type="password" value={staffFormPassword} onChange={e => setStaffFormPassword(e.target.value)} />
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">New Password</label>
+                  <Input type="password" placeholder="Leave blank to keep current password" value={staffFormPassword} onChange={e => setStaffFormPassword(e.target.value)} />
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">Branch</label>

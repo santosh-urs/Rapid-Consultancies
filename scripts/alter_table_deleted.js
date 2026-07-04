@@ -1,5 +1,10 @@
 const pg = require('pg');
-const url = 'postgresql://postgres:Database@1234@@db.gnbnsehqwsspncrtgcim.supabase.co:5432/postgres';
+
+const url = process.env.SUPABASE_DB_URL;
+if (!url) {
+  console.error('Set SUPABASE_DB_URL (e.g. in .env.local) before running this script.');
+  process.exit(1);
+}
 
 async function run() {
   const client = new pg.Client({
