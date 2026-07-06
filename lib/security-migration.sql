@@ -67,7 +67,7 @@ FOR EACH ROW EXECUTE FUNCTION hash_password_trigger();
 
 CREATE OR REPLACE FUNCTION verify_customer_login(p_identifier TEXT, p_password TEXT)
 RETURNS JSON
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions
 AS $$
 DECLARE
   v_is_email BOOLEAN := position('@' in p_identifier) > 0;
@@ -109,7 +109,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION verify_staff_login(p_identifier TEXT, p_password TEXT)
 RETURNS JSON
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions
 AS $$
 DECLARE
   v_is_email BOOLEAN := position('@' in p_identifier) > 0;
@@ -136,7 +136,7 @@ $$;
 -- 5. Password set/reset RPCs -------------------------------------------------
 
 CREATE OR REPLACE FUNCTION set_customer_password_by_id(p_customer_id TEXT, p_new_password TEXT)
-RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions AS $$
 BEGIN
   UPDATE customers SET password = crypt(p_new_password, gen_salt('bf'))
   WHERE id = p_customer_id AND password NOT LIKE 'DELETED\_%' ESCAPE '\';
@@ -145,7 +145,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION set_customer_password_by_email(p_email TEXT, p_new_password TEXT)
-RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions AS $$
 BEGIN
   UPDATE customers SET password = crypt(p_new_password, gen_salt('bf'))
   WHERE email ILIKE trim(p_email) AND password NOT LIKE 'DELETED\_%' ESCAPE '\';
@@ -154,7 +154,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION set_staff_password_by_id(p_staff_id TEXT, p_new_password TEXT)
-RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions AS $$
 BEGIN
   UPDATE staff SET password = crypt(p_new_password, gen_salt('bf')) WHERE id = p_staff_id;
   RETURN FOUND;
@@ -162,7 +162,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION set_staff_password_by_email(p_email TEXT, p_new_password TEXT)
-RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions AS $$
 BEGIN
   UPDATE staff SET password = crypt(p_new_password, gen_salt('bf')) WHERE email ILIKE trim(p_email);
   RETURN FOUND;
