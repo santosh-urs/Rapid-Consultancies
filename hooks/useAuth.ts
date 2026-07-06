@@ -192,90 +192,39 @@ export function useAuth() {
   };
 
   const forgotPassword = async ({ email }: PasswordResetRequest) => {
-    await new Promise((resolve) => setTimeout(resolve, 400));
     if (!email.includes('@')) {
       throw new Error('Invalid email');
     }
 
-    const { data: custMatches, error: custErr } = await supabase
-      .from('customers')
-      .select('email, id')
-      .ilike('email', email.trim());
-
-    if (custErr) {
-      console.error('Customer lookup error:', custErr);
-      throw new Error('Database lookup failed. Please try again.');
+    const res = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim() }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Unable to process reset request.');
     }
 
-    let role: AuthRole = 'user';
-    let matchedEmail = '';
-
-    if (custMatches && custMatches.length > 0) {
-      role = 'user';
-      matchedEmail = custMatches[0].email;
-    } else {
-      const { data: staffMatches, error: staffErr } = await supabase
-        .from('staff')
-        .select('email, id')
-        .ilike('email', email.trim());
-
-      if (staffErr) {
-        console.error('Staff lookup error:', staffErr);
-        throw new Error('Database lookup failed. Please try again.');
-      }
-
-      if (staffMatches && staffMatches.length > 0) {
-        role = 'staff';
-        matchedEmail = staffMatches[0].email;
-      } else {
-        throw new Error('No account found with this email address.');
-      }
-    }
-
-    const payload = {
-      email: matchedEmail,
-      role,
-      expires: Date.now() + 60 * 60 * 1000, // 1 hour
-    };
-
-    const token = btoa(JSON.stringify(payload));
-    return { success: true, token };
+    return { success: true, token: data.token };
   };
 
   const resetPassword = async ({ token, password }: ResetPasswordRequest) => {
-    await new Promise((resolve) => setTimeout(resolve, 400));
     if (!token || password.length < 8) {
       throw new Error('Invalid reset request');
     }
 
-    try {
-      const payload = JSON.parse(atob(token));
-      const { email, role, expires } = payload;
-      if (!email || !role || !expires) {
-        throw new Error('Invalid reset token format');
-      }
-      if (Date.now() > expires) {
-        throw new Error('Reset link has expired');
-      }
-
-      if (role === 'staff') {
-        const { error } = await supabase
-          .from('staff')
-          .update({ password })
-          .ilike('email', email);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('customers')
-          .update({ password })
-          .ilike('email', email);
-        if (error) throw error;
-      }
-      return true;
-    } catch (err: any) {
-      console.error('Password reset error:', err);
-      throw new Error(err.message || 'Invalid or expired reset link');
+    const res = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Invalid or expired reset link');
     }
+
+    return true;
   };
 
   return useMemo(
