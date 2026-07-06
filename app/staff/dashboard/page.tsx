@@ -16,6 +16,7 @@ import {
   addMonthsUTC,
   formatISODateOnly,
   getLocalISODate,
+  inferTenureMonths,
 } from '@/lib/loanUtils';
 import {
   LayoutDashboard,
@@ -359,9 +360,7 @@ export default function StaffDashboardPage() {
           const loanType = l.loan_type || (goldWeight > 0 ? 'Gold Loan' : 'Loan');
           const tenureMonths = l.tenure_months ? Number(l.tenure_months) : (() => {
             if (!l.start_date || !l.maturity_date) return 0;
-            const s = parseDateUTC(l.start_date);
-            const e = parseDateUTC(l.maturity_date);
-            return (e.getUTCFullYear() - s.getUTCFullYear()) * 12 + (e.getUTCMonth() - s.getUTCMonth());
+            return inferTenureMonths(l.start_date, l.maturity_date);
           })();
           return {
             id: l.id,

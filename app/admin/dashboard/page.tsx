@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { useToast } from '@/components/ui/Toast';
 import { supabase } from '@/lib/supabase';
-import { calculateDynamicInterest } from '@/lib/loanUtils';
+import { calculateDynamicInterest, addMonthsUTC, addDaysUTC, getTodayUTC, formatISODateOnly, inferTenureMonths, advanceNextDueDateFully } from '@/lib/loanUtils';
 import {
   LayoutDashboard,
   Users,
@@ -478,10 +478,24 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const generateNextLoanId = (loanType: string) => {
-    const prefix = loanType === 'Weekly Loan' ? 'WL' : 'GL';
-    if (!loans || loans.length === 0) return `${prefix}-2101`;
-    const numbers = loans
+  const LOAN_ID_PREFIXES: Record<string, string> = {
+    'Gold Loan': 'GL',
+    'Weekly Loan': 'WL',
+    'Business Loan': 'BL',
+    'Home Loan': 'HL',
+    'Car Loan': 'CL',
+    'Two Wheeler Loan': 'TL',
+    'Mortgage Loan': 'ML',
+    'Home Take Loans': 'HT',
+  };
+
+  // loansOverride lets callers pass a freshly-fetched list (bypassing possibly-stale
+  // React state) when retrying after a loan_id collision from a concurrent approval.
+  const generateNextLoanId = (loanType: string, loansOverride?: { loanId: string }[]) => {
+    const prefix = LOAN_ID_PREFIXES[loanType] || 'GL';
+    const source = loansOverride ?? loans;
+    if (!source || source.length === 0) return `${prefix}-2101`;
+    const numbers = source
       .map(l => {
         if (!l.loanId) return 0;
         const parts = l.loanId.split('-');
@@ -493,6 +507,16 @@ export default function AdminDashboardPage() {
     const maxNum = Math.max(2100, ...numbers);
     return `${prefix}-${maxNum + 1}`;
   };
+
+  // Fetches the current loan_id list fresh from the DB, for regenerating a loan ID
+  // after a unique-constraint collision (stale in-memory state produced a duplicate).
+  const fetchFreshLoanIds = async (): Promise<{ loanId: string }[]> => {
+    const { data } = await supabase.from('loans').select('loan_id');
+    return (data || []).map((row: any) => ({ loanId: row.loan_id }));
+  };
+
+  const isLoanIdCollision = (error: any) =>
+    error?.code === '23505' && typeof error?.message === 'string' && error.message.includes('loan_id');
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -525,9 +549,7 @@ export default function AdminDashboardPage() {
         const loanType = l.loan_type || (goldWeight > 0 ? 'Gold Loan' : 'Loan');
         let tenureMonths = l.tenure_months ? Number(l.tenure_months) : 0;
         if (!tenureMonths && l.start_date && l.maturity_date) {
-          const s = new Date(l.start_date);
-          const e = new Date(l.maturity_date);
-          tenureMonths = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+          tenureMonths = inferTenureMonths(l.start_date, l.maturity_date);
         }
         return {
           id: l.id,
@@ -537,7 +559,7 @@ export default function AdminDashboardPage() {
           status: l.status,
           principal: Number(l.principal),
           outstanding: Number(l.outstanding),
-          interestDue: Number(l.interest_due || 0),
+          interestDue: calculateDynamicInterest({ ...l, loanType, tenureMonths }),
           interestRate: Number(l.interest_rate),
           nextDueDate: l.next_due_date || '',
           startDate: l.start_date,
@@ -1044,19 +1066,15 @@ export default function AdminDashboardPage() {
     if (!cust) return;
     setIsLoading(true);
 
-    const startDate = new Date();
-    const maturityDate = new Date();
-    maturityDate.setMonth(startDate.getMonth() + Number(loanFormTenure));
+    const startDate = getTodayUTC();
+    const maturityDate = addMonthsUTC(startDate, Number(loanFormTenure));
 
-    const autoNextDue = new Date();
-    if (loanFormLoanType === 'Weekly Loan') {
-      autoNextDue.setDate(startDate.getDate() + 7);
-    } else {
-      autoNextDue.setMonth(startDate.getMonth() + 1);
-    }
+    const autoNextDue = loanFormLoanType === 'Weekly Loan'
+      ? addDaysUTC(startDate, 7)
+      : addMonthsUTC(startDate, 1);
     const nextDueDateStr = loanFormLoanType === 'Weekly Loan'
-      ? autoNextDue.toISOString().split('T')[0]
-      : (loanFormDueDate || autoNextDue.toISOString().split('T')[0]);
+      ? formatISODateOnly(autoNextDue)
+      : (loanFormDueDate || formatISODateOnly(autoNextDue));
 
     const newLoan: Loan = {
       id: `loan-${Date.now()}`,
@@ -1089,27 +1107,35 @@ export default function AdminDashboardPage() {
 
     try {
       if (isSupabaseConfigured) {
-        const { error } = await supabase.from('loans').insert({
-          id: newLoan.id,
-          loan_id: newLoan.loanId,
-          customer_id: newLoan.customerId,
-          customer_name: newLoan.customerName,
-          status: newLoan.status,
-          principal: newLoan.principal,
-          outstanding: newLoan.outstanding,
-          interest_due: newLoan.interestDue,
-          interest_rate: newLoan.interestRate,
-          start_date: newLoan.startDate,
-          maturity_date: newLoan.maturityDate,
-          next_due_date: newLoan.nextDueDate,
-          gold_weight: newLoan.goldWeight,
-          gold_purity: newLoan.goldPurity,
-          estimated_gold_value: newLoan.estimatedGoldValue,
-          branch: newLoan.branch,
-          loan_type: newLoan.loanType,
-          tenure_months: newLoan.tenureMonths,
-        });
-        if (error) throw error;
+        // Retry with a freshly-generated loan_id if a concurrent issuance/approval
+        // already claimed the one computed from possibly-stale in-memory state.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (attempt > 0) {
+            newLoan.loanId = generateNextLoanId(loanFormLoanType, await fetchFreshLoanIds());
+          }
+          const { error } = await supabase.from('loans').insert({
+            id: newLoan.id,
+            loan_id: newLoan.loanId,
+            customer_id: newLoan.customerId,
+            customer_name: newLoan.customerName,
+            status: newLoan.status,
+            principal: newLoan.principal,
+            outstanding: newLoan.outstanding,
+            interest_due: newLoan.interestDue,
+            interest_rate: newLoan.interestRate,
+            start_date: newLoan.startDate,
+            maturity_date: newLoan.maturityDate,
+            next_due_date: newLoan.nextDueDate,
+            gold_weight: newLoan.goldWeight,
+            gold_purity: newLoan.goldPurity,
+            estimated_gold_value: newLoan.estimatedGoldValue,
+            branch: newLoan.branch,
+            loan_type: newLoan.loanType,
+            tenure_months: newLoan.tenureMonths,
+          });
+          if (!error) break;
+          if (attempt === 2 || !isLoanIdCollision(error)) throw error;
+        }
       }
 
       const updated = [newLoan, ...loans];
@@ -1166,6 +1192,7 @@ export default function AdminDashboardPage() {
     let updatedOutstanding = selectedLoan.outstanding;
     let updatedInterestDue = selectedLoan.interestDue;
     let detailMsg = '';
+    const interestDueBefore = selectedLoan.interestDue;
 
     if (adjustType === 'payment') {
       if (adjustPaymentType === 'principal_only') {
@@ -1192,11 +1219,21 @@ export default function AdminDashboardPage() {
 
     const updatedStatus = updatedOutstanding === 0 && updatedInterestDue === 0 ? 'closed' : selectedLoan.status;
 
+    // interest_due is recomputed dynamically from next_due_date on every load (see fetchData),
+    // so a payment that fully clears the currently-due interest must advance next_due_date too —
+    // otherwise the "due" amount would silently reappear on the next refresh.
+    const clearedAllDueInterest = adjustType === 'payment' && adjustPaymentType !== 'principal_only'
+      && interestDueBefore > 0 && updatedInterestDue === 0;
+    const updatedNextDueDate = clearedAllDueInterest
+      ? advanceNextDueDateFully(selectedLoan)
+      : selectedLoan.nextDueDate;
+
     try {
       if (isSupabaseConfigured) {
         const { error } = await supabase.from('loans').update({
           outstanding: updatedOutstanding,
           interest_due: updatedInterestDue,
+          next_due_date: updatedNextDueDate,
           status: updatedStatus,
         }).eq('id', selectedLoan.id);
         if (error) throw error;
@@ -1222,6 +1259,7 @@ export default function AdminDashboardPage() {
             ...l,
             outstanding: updatedOutstanding,
             interestDue: updatedInterestDue,
+            nextDueDate: updatedNextDueDate,
             status: updatedStatus as Loan['status'],
           };
         }
@@ -1248,8 +1286,20 @@ export default function AdminDashboardPage() {
       pending: 'active',
     };
     const nextStatus = nextStatusMap[l.status];
-    const newOutstanding = nextStatus === 'closed' ? 0 : l.outstanding === 0 ? l.principal : l.outstanding;
-    const newInterest = nextStatus === 'closed' ? 0 : l.interestDue;
+
+    let confirmMsg = `Change loan ${l.loanId} status from ${l.status.toUpperCase()} to ${nextStatus.toUpperCase()}?`;
+    if (nextStatus === 'closed') {
+      confirmMsg = `Close loan ${l.loanId}? This will zero out its outstanding balance (₹${l.outstanding.toLocaleString('en-IN')}) and interest due (₹${l.interestDue.toLocaleString('en-IN')}). This cannot be undone automatically — reopening later will NOT restore these amounts.`;
+    } else if (l.status === 'closed' && nextStatus === 'active') {
+      confirmMsg = `Reopen loan ${l.loanId}? Its outstanding balance was discarded when it was closed, so it will reopen with ₹0 outstanding. Use "Adjust Loan" afterward to set the correct balance.`;
+    }
+    if (!confirm(confirmMsg)) return;
+
+    // Closing zeroes the balance; reopening a closed loan can't recover the discarded
+    // amount, so it starts at 0 rather than fabricating a number (previously reset to
+    // the full original principal, which overstated what was actually still owed).
+    const newOutstanding = nextStatus === 'closed' ? 0 : (l.status === 'closed' ? 0 : l.outstanding);
+    const newInterest = nextStatus === 'closed' ? 0 : (l.status === 'closed' ? 0 : l.interestDue);
     setIsLoading(true);
 
     try {
@@ -1275,7 +1325,10 @@ export default function AdminDashboardPage() {
       });
       setLoans(updated);
 
-      await addAuditLog('Loan Status Toggled', `Changed status of loan ${l.loanId} to ${nextStatus.toUpperCase()}`);
+      const discardedNote = nextStatus === 'closed'
+        ? ` (discarded outstanding ₹${l.outstanding.toLocaleString('en-IN')}, interest ₹${l.interestDue.toLocaleString('en-IN')})`
+        : '';
+      await addAuditLog('Loan Status Toggled', `Changed status of loan ${l.loanId} to ${nextStatus.toUpperCase()}${discardedNote}`);
       toast.push(`Loan ${l.loanId} status updated to ${nextStatus}.`);
     } catch (err: any) {
       console.error(err);
@@ -1386,12 +1439,10 @@ export default function AdminDashboardPage() {
 
       let newLoan: Loan | null = null;
       if (req.loanType) {
-        const startDate = new Date();
+        const startDate = getTodayUTC();
         const tenureMonths = 6;
-        const maturityDate = new Date();
-        maturityDate.setMonth(startDate.getMonth() + tenureMonths);
-        const nextDueDate = new Date();
-        nextDueDate.setMonth(startDate.getMonth() + 1);
+        const maturityDate = addMonthsUTC(startDate, tenureMonths);
+        const nextDueDate = addMonthsUTC(startDate, 1);
 
         newLoan = {
           id: `loan-${Date.now()}`,
@@ -1729,18 +1780,14 @@ export default function AdminDashboardPage() {
 
   const handleApproveSanction = async (req: SanctionRequest) => {
     setIsLoading(true);
-    const startDate = new Date();
-    const maturityDate = new Date();
-    maturityDate.setMonth(startDate.getMonth() + req.tenureMonths);
-    const autoNextDue = new Date();
-    if (req.loanType === 'Weekly Loan') {
-      autoNextDue.setDate(startDate.getDate() + 7);
-    } else {
-      autoNextDue.setMonth(startDate.getMonth() + 1);
-    }
+    const startDate = getTodayUTC();
+    const maturityDate = addMonthsUTC(startDate, req.tenureMonths);
+    const autoNextDue = req.loanType === 'Weekly Loan'
+      ? addDaysUTC(startDate, 7)
+      : addMonthsUTC(startDate, 1);
     const sanctionNextDue = req.loanType === 'Weekly Loan'
-      ? autoNextDue.toISOString().split('T')[0]
-      : (req.requestedDueDate || autoNextDue.toISOString().split('T')[0]);
+      ? formatISODateOnly(autoNextDue)
+      : (req.requestedDueDate || formatISODateOnly(autoNextDue));
 
     const newLoan: Loan = {
       id: `loan-${Date.now()}`,
@@ -1773,84 +1820,114 @@ export default function AdminDashboardPage() {
 
     try {
       if (isSupabaseConfigured) {
-        let custId = req.customerId;
-
-        // If no customerId, look up by mobile first to avoid creating duplicates
-        if (!custId && req.customerMobile) {
-          const mobile = req.customerMobile.replace(/\D/g, '').slice(-10);
-          const { data: existing } = await supabase
-            .from('customers')
-            .select('id')
-            .ilike('mobile', `%${mobile}`)
-            .not('password', 'like', 'DELETED_%')
-            .maybeSingle();
-          if (existing) custId = existing.id;
+        // Atomically claim this request first so a double-click or a second admin/tab
+        // can't both pass the check and each create their own loan (and customer).
+        const { data: claimedRows, error: claimErr } = await supabase
+          .from('loan_sanction_requests')
+          .update({
+            status: 'approved',
+            reviewed_by: user?.name ?? 'Admin',
+            reviewed_date: new Date().toISOString(),
+            admin_notes: sanctionAdminNotes,
+          })
+          .eq('id', req.id)
+          .eq('status', 'pending')
+          .select('id');
+        if (claimErr) throw claimErr;
+        if (!claimedRows || claimedRows.length === 0) {
+          toast.push('This sanction request has already been reviewed.');
+          setIsLoading(false);
+          return;
         }
 
-        // Create customer account only if no existing customer was found
-        if (!custId) {
-          custId = `cust-${Date.now()}`;
-          const custPassword = req.customerMobile || req.customerName.replace(/\s+/g, '').toLowerCase();
-          const { error: custErr } = await supabase.from('customers').insert({
-            id: custId,
-            name: req.customerName,
-            mobile: req.customerMobile || '',
-            email: req.customerEmail || '',
-            address: req.customerAddress || '',
-            dob: req.customerDob || null,
-            kyc_status: 'Pending',
-            branch: req.branch,
-            joined_date: startDate.toISOString().split('T')[0],
-            password: custPassword,
-          });
-          if (custErr) throw custErr;
-        }
+        try {
+          let custId = req.customerId;
 
-        // Update loan with real customer id
-        newLoan.customerId = custId;
+          // If no customerId, look up by mobile first to avoid creating duplicates
+          if (!custId && req.customerMobile) {
+            const mobile = req.customerMobile.replace(/\D/g, '').slice(-10);
+            const { data: existing } = await supabase
+              .from('customers')
+              .select('id')
+              .ilike('mobile', `%${mobile}`)
+              .not('password', 'like', 'DELETED_%')
+              .maybeSingle();
+            if (existing) custId = existing.id;
+          }
 
-        // Step 2: Create the loan
-        const { error: loanErr } = await supabase.from('loans').insert({
-          id: newLoan.id,
-          loan_id: newLoan.loanId,
-          customer_id: custId,
-          customer_name: newLoan.customerName,
-          status: newLoan.status,
-          principal: newLoan.principal,
-          outstanding: newLoan.outstanding,
-          interest_due: newLoan.interestDue,
-          interest_rate: newLoan.interestRate,
-          start_date: newLoan.startDate,
-          maturity_date: newLoan.maturityDate,
-          next_due_date: newLoan.nextDueDate,
-          gold_weight: newLoan.goldWeight,
-          gold_purity: newLoan.goldPurity,
-          estimated_gold_value: newLoan.estimatedGoldValue,
-          branch: newLoan.branch,
-          loan_type: newLoan.loanType,
-          tenure_months: newLoan.tenureMonths,
-        });
-        if (loanErr) throw loanErr;
+          // Create customer account only if no existing customer was found
+          if (!custId) {
+            custId = `cust-${Date.now()}`;
+            const custPassword = req.customerMobile || req.customerName.replace(/\s+/g, '').toLowerCase();
+            const { error: custErr } = await supabase.from('customers').insert({
+              id: custId,
+              name: req.customerName,
+              mobile: req.customerMobile || '',
+              email: req.customerEmail || '',
+              address: req.customerAddress || '',
+              dob: req.customerDob || null,
+              kyc_status: 'Pending',
+              branch: req.branch,
+              joined_date: startDate.toISOString().split('T')[0],
+              password: custPassword,
+            });
+            if (custErr) throw custErr;
+          }
 
-        // Step 3: Mark sanction as approved
-        const { error: sanctErr } = await supabase.from('loan_sanction_requests').update({
-          status: 'approved',
-          reviewed_by: user?.name ?? 'Admin',
-          reviewed_date: new Date().toISOString(),
-          admin_notes: sanctionAdminNotes,
-          customer_id: custId,
-        }).eq('id', req.id);
-        if (sanctErr) throw sanctErr;
+          // Update loan with real customer id
+          newLoan.customerId = custId;
 
-        // Refresh customers list
-        const { data: newCusts } = await supabase.from('customers').select('*');
-        if (newCusts) {
-          setCustomers(newCusts.map((c: any) => ({
-            id: c.id, name: c.name, mobile: c.mobile, email: c.email,
-            address: c.address || '', dob: c.dob || '',
-            kycStatus: c.kyc_status, branch: c.branch, joinedDate: c.joined_date,
-            password: c.password || '', processingFee: Number(c.processing_fee ?? 0),
-          })));
+          // Step 2: Create the loan, retrying with a fresh loan_id if a concurrent
+          // approval already claimed the one computed from possibly-stale state.
+          for (let attempt = 0; attempt < 3; attempt++) {
+            if (attempt > 0) {
+              newLoan.loanId = generateNextLoanId(req.loanType || 'Gold Loan', await fetchFreshLoanIds());
+            }
+            const { error: loanErr } = await supabase.from('loans').insert({
+              id: newLoan.id,
+              loan_id: newLoan.loanId,
+              customer_id: custId,
+              customer_name: newLoan.customerName,
+              status: newLoan.status,
+              principal: newLoan.principal,
+              outstanding: newLoan.outstanding,
+              interest_due: newLoan.interestDue,
+              interest_rate: newLoan.interestRate,
+              start_date: newLoan.startDate,
+              maturity_date: newLoan.maturityDate,
+              next_due_date: newLoan.nextDueDate,
+              gold_weight: newLoan.goldWeight,
+              gold_purity: newLoan.goldPurity,
+              estimated_gold_value: newLoan.estimatedGoldValue,
+              branch: newLoan.branch,
+              loan_type: newLoan.loanType,
+              tenure_months: newLoan.tenureMonths,
+            });
+            if (!loanErr) break;
+            if (attempt === 2 || !isLoanIdCollision(loanErr)) throw loanErr;
+          }
+
+          // Step 3: Record which customer this request ended up mapped to
+          const { error: sanctErr } = await supabase.from('loan_sanction_requests').update({
+            customer_id: custId,
+          }).eq('id', req.id);
+          if (sanctErr) throw sanctErr;
+
+          // Refresh customers list
+          const { data: newCusts } = await supabase.from('customers').select('*');
+          if (newCusts) {
+            setCustomers(newCusts.map((c: any) => ({
+              id: c.id, name: c.name, mobile: c.mobile, email: c.email,
+              address: c.address || '', dob: c.dob || '',
+              kycStatus: c.kyc_status, branch: c.branch, joinedDate: c.joined_date,
+              password: c.password || '', processingFee: Number(c.processing_fee ?? 0),
+            })));
+          }
+        } catch (innerErr) {
+          // Roll the claim back so the request can be retried cleanly instead of
+          // being stuck "approved" with no loan ever created.
+          await supabase.from('loan_sanction_requests').update({ status: 'pending' }).eq('id', req.id);
+          throw innerErr;
         }
       }
 
@@ -2352,7 +2429,7 @@ export default function AdminDashboardPage() {
                       <Button variant="outline" className="text-xs py-1.5 px-3 rounded-xl" onClick={() => handleAdjustLoanClick(l)} disabled={l.status === 'closed'}>
                         Adjust
                       </Button>
-                      <Button variant="ghost" className="text-xs py-1.5 px-3 text-[#555555] rounded-xl hover:bg-surface" onClick={() => handleToggleLoanStatus(l)}>
+                      <Button variant="ghost" className="text-xs py-1.5 px-3 text-[#555555] rounded-xl hover:bg-surface" onClick={() => handleToggleLoanStatus(l)} disabled={isLoading}>
                         Status
                       </Button>
                     </div>
@@ -2808,7 +2885,23 @@ export default function AdminDashboardPage() {
   const handleApproveOutstandingEdit = async (req: any) => {
     setIsLoading(true);
     try {
-      // 1. Mark request as approved in database
+      // 1. Only apply if the loan's outstanding is still what staff saw when they
+      // submitted this request — otherwise it's stale (paid, closed, or edited since)
+      // and blindly writing req.newOutstanding could silently reopen or corrupt the balance.
+      const { data: updatedRows, error: loanErr } = await supabase
+        .from('loans')
+        .update({ outstanding: req.newOutstanding })
+        .eq('id', req.loanDbId)
+        .eq('outstanding', req.currentOutstanding)
+        .select('id');
+      if (loanErr) throw loanErr;
+      if (!updatedRows || updatedRows.length === 0) {
+        toast.push(`Cannot approve: loan ${req.loanId}'s outstanding balance has changed since this request was submitted. Ask staff to review and resubmit.`);
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Mark request as approved in database
       const { error: reqErr } = await supabase.from('outstanding_edit_requests').update({
         status: 'approved',
         admin_notes: outstandingEditAdminNotes,
@@ -2816,12 +2909,6 @@ export default function AdminDashboardPage() {
         reviewed_at: new Date().toISOString(),
       }).eq('id', req.id);
       if (reqErr) throw reqErr;
-
-      // 2. Update loan outstanding amount in database
-      const { error: loanErr } = await supabase.from('loans').update({
-        outstanding: req.newOutstanding,
-      }).eq('id', req.loanDbId);
-      if (loanErr) throw loanErr;
 
       // Update state locally
       setOutstandingEditRequests(prev => prev.map(r =>
@@ -3670,7 +3757,7 @@ export default function AdminDashboardPage() {
 
               <div className="pt-4 border-t border-[#E5E5E5] flex justify-end gap-3">
                 <Button type="button" variant="outline" onClick={() => setIsAddCustomerOpen(false)}>Cancel</Button>
-                <Button type="submit">Add Customer</Button>
+                <Button type="submit" disabled={isLoading}>Add Customer</Button>
               </div>
             </form>
           </div>
@@ -3824,7 +3911,7 @@ export default function AdminDashboardPage() {
 
               <div className="pt-4 border-t border-[#E5E5E5] flex justify-end gap-3">
                 <Button type="button" variant="outline" onClick={() => setIsEditCustomerOpen(false)}>Cancel</Button>
-                <Button type="submit">Save Changes</Button>
+                <Button type="submit" disabled={isLoading}>Save Changes</Button>
               </div>
             </form>
           </div>
@@ -4014,7 +4101,7 @@ export default function AdminDashboardPage() {
 
               <div className="pt-4 border-t border-[#E5E5E5] flex justify-end gap-3">
                 <Button type="button" variant="outline" onClick={() => setIsIssueLoanOpen(false)}>Cancel</Button>
-                <Button type="submit">Disburse Loan</Button>
+                <Button type="submit" disabled={isLoading}>Disburse Loan</Button>
               </div>
             </form>
           </div>
@@ -4054,7 +4141,7 @@ export default function AdminDashboardPage() {
               </div>
               <div className="pt-4 border-t border-[#E5E5E5] flex justify-end gap-3">
                 <Button type="button" variant="outline" onClick={() => setIsAddStaffOpen(false)}>Cancel</Button>
-                <Button type="submit">Add Staff</Button>
+                <Button type="submit" disabled={isLoading}>Add Staff</Button>
               </div>
             </form>
           </div>
@@ -4090,7 +4177,7 @@ export default function AdminDashboardPage() {
               </div>
               <div className="pt-4 border-t border-[#E5E5E5] flex justify-end gap-3">
                 <Button type="button" variant="outline" onClick={() => setIsEditStaffOpen(false)}>Cancel</Button>
-                <Button type="submit">Save Changes</Button>
+                <Button type="submit" disabled={isLoading}>Save Changes</Button>
               </div>
             </form>
           </div>
@@ -4155,10 +4242,10 @@ export default function AdminDashboardPage() {
                 <Input placeholder="Add remarks for the staff member…" value={sanctionAdminNotes} onChange={e => setSanctionAdminNotes(e.target.value)} />
               </div>
               <div className="flex gap-3 pt-2">
-                <Button className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleApproveSanction(selectedSanction)}>
+                <Button className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700" disabled={isLoading} onClick={() => handleApproveSanction(selectedSanction)}>
                   <Check className="h-4 w-4" /> Approve & Issue Loan
                 </Button>
-                <Button variant="outline" className="flex-1 flex items-center justify-center gap-2 text-rose-600 border-rose-300 hover:bg-rose-50" onClick={() => handleRejectSanction(selectedSanction)}>
+                <Button variant="outline" className="flex-1 flex items-center justify-center gap-2 text-rose-600 border-rose-300 hover:bg-rose-50" disabled={isLoading} onClick={() => handleRejectSanction(selectedSanction)}>
                   <X className="h-4 w-4" /> Reject
                 </Button>
               </div>
@@ -4323,7 +4410,7 @@ export default function AdminDashboardPage() {
 
               <div className="pt-4 border-t border-[#E5E5E5] flex justify-end gap-3">
                 <Button type="button" variant="outline" onClick={() => setIsAdjustLoanOpen(false)}>Cancel</Button>
-                <Button type="submit">Submit Adjustment</Button>
+                <Button type="submit" disabled={isLoading}>Submit Adjustment</Button>
               </div>
             </form>
           </div>

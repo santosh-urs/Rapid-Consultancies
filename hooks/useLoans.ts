@@ -9,6 +9,7 @@ import {
   addDaysUTC,
   addMonthsUTC,
   formatISODateOnly,
+  inferTenureMonths,
 } from '@/lib/loanUtils';
 
 export interface LoanSummary {
@@ -145,9 +146,7 @@ export function useLoans() {
           const loanType = l.loan_type || (goldWeight > 0 ? 'Gold Loan' : 'Loan');
           const tenureMonths = l.tenure_months ? Number(l.tenure_months) : (() => {
             if (!l.start_date || !l.maturity_date) return 0;
-            const s = parseDateUTC(l.start_date);
-            const e = parseDateUTC(l.maturity_date);
-            return (e.getUTCFullYear() - s.getUTCFullYear()) * 12 + (e.getUTCMonth() - s.getUTCMonth());
+            return inferTenureMonths(l.start_date, l.maturity_date);
           })();
           return {
             id: l.id,
@@ -227,9 +226,7 @@ export function useLoanDetail(loanId: string) {
         if (l) {
           const tenureMonths = l.tenure_months ? Number(l.tenure_months) : (() => {
             if (!l.start_date || !l.maturity_date) return 0;
-            const s = parseDateUTC(l.start_date);
-            const e = parseDateUTC(l.maturity_date);
-            return (e.getUTCFullYear() - s.getUTCFullYear()) * 12 + (e.getUTCMonth() - s.getUTCMonth());
+            return inferTenureMonths(l.start_date, l.maturity_date);
           })();
 
           const goldWeight = Number(l.gold_weight);
