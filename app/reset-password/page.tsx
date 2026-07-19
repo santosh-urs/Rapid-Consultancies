@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { z } from 'zod';
@@ -13,7 +12,6 @@ const passwordSchema = z.string().min(8);
 export default function ResetPasswordPage() {
   const router = useRouter();
   const [token, setToken] = useState('');
-  const { resetPassword } = useAuth();
   const [password, setPassword] = useState('');
 
   useEffect(() => {
@@ -55,11 +53,19 @@ export default function ResetPasswordPage() {
     setIsSubmitting(true);
 
     try {
-      await resetPassword({ token, password });
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Unable to reset password. Please try again.');
+      }
       setSuccess(true);
       setTimeout(() => router.push('/login'), 1200);
-    } catch (err) {
-      setError('Unable to reset password. Please try again.');
+    } catch (err: any) {
+      setError(err.message || 'Unable to reset password. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

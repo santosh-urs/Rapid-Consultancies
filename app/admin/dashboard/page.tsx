@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { useToast } from '@/components/ui/Toast';
 import { supabase } from '@/lib/supabase';
 import { calculateDynamicInterest, addMonthsUTC, addDaysUTC, getTodayUTC, formatISODateOnly, inferTenureMonths, advanceNextDueDateFully } from '@/lib/loanUtils';
+import { validateImageUpload } from '@/lib/fileUpload';
 import {
   LayoutDashboard,
   Users,
@@ -1154,10 +1155,14 @@ export default function AdminDashboardPage() {
   };
 
   const handleUploadGoldPhoto = async (loan: Loan, file: File) => {
+    const validation = validateImageUpload(file);
+    if (!validation.ok) {
+      toast.push(validation.error);
+      return;
+    }
     setUploadingGoldPhotoId(loan.id);
     try {
-      const ext = file.name.split('.').pop() || 'jpg';
-      const path = `gold/${loan.id}.${ext}`;
+      const path = `gold/${loan.id}.${validation.ext}`;
       const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
       if (upErr) throw upErr;
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
@@ -2194,10 +2199,14 @@ export default function AdminDashboardPage() {
   );
 
   const handleUploadAvatar = async (customer: Customer, file: File) => {
+    const validation = validateImageUpload(file);
+    if (!validation.ok) {
+      toast.push(validation.error);
+      return;
+    }
     setUploadingAvatarId(customer.id);
     try {
-      const ext = file.name.split('.').pop();
-      const path = `${customer.id}.${ext}`;
+      const path = `${customer.id}.${validation.ext}`;
       const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
       if (upErr) throw upErr;
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);

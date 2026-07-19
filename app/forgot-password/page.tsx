@@ -2,52 +2,46 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
 export default function ForgotPasswordPage() {
-  const { forgotPassword } = useAuth();
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
-  const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsSubmitting(true);
-    setError('');
 
     try {
-      const res = await forgotPassword({ email });
-      if (res && typeof res === 'object' && 'token' in res) {
-        const link = `${window.location.origin}/reset-password?token=${res.token}`;
+      const tokenRes = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const tokenData = await tokenRes.json();
 
-        // Call the server-side email dispatch endpoint
+      if (tokenRes.ok && tokenData.token) {
+        const link = `${window.location.origin}/reset-password?token=${tokenData.token}`;
+
         const emailRes = await fetch('/api/send-reset', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, resetLink: link }),
         });
-
-        if (!emailRes.ok) {
-          const errData = await emailRes.json();
-          throw new Error(errData.error || 'Failed to send reset email via server.');
-        }
-
-        const data = await emailRes.json();
-        if (data.success && data.emailSent) {
-          setEmailSent(true);
-        } else {
-          setEmailSent(false);
-        }
+        const emailData = emailRes.ok ? await emailRes.json() : null;
+        setEmailSent(Boolean(emailData?.success && emailData?.emailSent));
+      } else {
+        // Account not found, or lookup failed — show the same generic
+        // outcome as success so this can't be used to enumerate accounts.
+        setEmailSent(false);
       }
       setSent(true);
-    } catch (err: any) {
-      setError(err.message || 'Unable to send reset link. Please try again later.');
+    } catch {
+      setEmailSent(false);
+      setSent(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -94,7 +88,6 @@ export default function ForgotPasswordPage() {
                 required
               />
             </div>
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
             <Button type="submit" disabled={isSubmitting} className="w-full">
               {isSubmitting ? 'Sending…' : 'Send Reset Link'}
             </Button>

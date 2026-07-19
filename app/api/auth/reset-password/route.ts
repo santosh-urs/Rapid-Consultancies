@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { verifyResetToken } from '@/lib/resetToken';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 
 export async function POST(req: NextRequest) {
   try {
+    const rate = checkRateLimit(`reset-password:${getClientIp(req)}`, 10, 15 * 60 * 1000);
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: 'Too many attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(rate.retryAfterSeconds) } }
+      );
+    }
+
     const { token, password } = await req.json();
     if (typeof token !== 'string' || typeof password !== 'string' || password.length < 8) {
       return NextResponse.json({ error: 'Invalid reset request' }, { status: 400 });

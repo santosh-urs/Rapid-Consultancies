@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { createResetToken } from '@/lib/resetToken';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 
 export async function POST(req: NextRequest) {
   try {
+    const rate = checkRateLimit(`forgot-password:${getClientIp(req)}`, 5, 15 * 60 * 1000);
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(rate.retryAfterSeconds) } }
+      );
+    }
+
     const { email } = await req.json();
     const cleanEmail = typeof email === 'string' ? email.trim() : '';
     if (!cleanEmail || !cleanEmail.includes('@')) {

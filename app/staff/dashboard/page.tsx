@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { useToast } from '@/components/ui/Toast';
 import { supabase } from '@/lib/supabase';
+import { validateImageUpload } from '@/lib/fileUpload';
 import {
   calculateDynamicInterest,
   parseDateUTC,
@@ -768,10 +769,14 @@ export default function StaffDashboardPage() {
 
 
   const handleUploadGoldPhoto = async (loan: Loan, file: File) => {
+    const validation = validateImageUpload(file);
+    if (!validation.ok) {
+      toast.push(validation.error);
+      return;
+    }
     setUploadingGoldPhotoId(loan.id);
     try {
-      const ext = file.name.split('.').pop() || 'jpg';
-      const path = `gold/${loan.id}.${ext}`;
+      const path = `gold/${loan.id}.${validation.ext}`;
       const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
       if (upErr) throw upErr;
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
