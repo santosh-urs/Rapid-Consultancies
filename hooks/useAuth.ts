@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabase';
 
 type AuthRole = 'user' | 'admin' | 'staff';
 
@@ -29,11 +28,6 @@ interface User {
 }
 
 const storageKey = 'goldsecure-user';
-const authCookieName = 'auth_token';
-const authRoleCookieName = 'auth_role';
-const authTokenValue = 'goldsecure-token';
-const adminAuthTokenValue = 'goldsecure-admin-token';
-const staffAuthTokenValue = 'goldsecure-staff-token';
 
 function getStoredUser(): User | null {
   if (typeof window === 'undefined') return null;
@@ -41,153 +35,45 @@ function getStoredUser(): User | null {
   return stored ? JSON.parse(stored) : null;
 }
 
-function getAuthToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return document.cookie
-    .split('; ')
-    .find((cookie) => cookie.startsWith(`${authCookieName}=`))
-    ?.split('=')[1] ?? null;
-}
-
-function getAuthRole(): AuthRole | null {
-  if (typeof window === 'undefined') return null;
-  const role = document.cookie
-    .split('; ')
-    .find((cookie) => cookie.startsWith(`${authRoleCookieName}=`))
-    ?.split('=')[1];
-
-  if (role === 'admin') return 'admin';
-  if (role === 'staff') return 'staff';
-  if (role === 'user') return 'user';
-  return null;
-}
-
-function setAuthToken(value: string) {
-  if (typeof window === 'undefined') return;
-  document.cookie = `${authCookieName}=${value}; path=/; max-age=${60 * 60 * 24}; SameSite=Strict`;
-}
-
-function setAuthRole(role: AuthRole) {
-  if (typeof window === 'undefined') return;
-  document.cookie = `${authRoleCookieName}=${role}; path=/; max-age=${60 * 60 * 24}; SameSite=Strict`;
-}
-
-function removeAuthToken() {
-  if (typeof window === 'undefined') return;
-  document.cookie = `${authCookieName}=; path=/; max-age=0`;
-  document.cookie = `${authRoleCookieName}=; path=/; max-age=0`;
-}
-
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     const stored = getStoredUser();
-    if (stored) {
-      setUser(stored);
-      return;
-    }
-
-    const token = getAuthToken();
-    const role = getAuthRole();
-
-    if (token && role === 'admin') {
-      setUser({ id: 'admin-001', name: 'Naveen — Rapid Consultancy', mobile: '7670870964', role: 'admin' });
-    } else if (token && role === 'staff') {
-      // staff user should be in localStorage; if not, clear token
-      removeAuthToken();
-    } else if (token) {
-      removeAuthToken();
-    }
+    if (stored) setUser(stored);
   }, []);
 
   const login = async ({ identifier, password, role = 'user' }: LoginCredentials) => {
-    await new Promise((resolve) => setTimeout(resolve, 450));
-
     if (!identifier || !password) {
       throw new Error('Invalid credentials');
     }
 
-    let authenticatedUser: User;
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, password, role }),
+    });
+    const data = await res.json();
 
-    if (role === 'admin') {
-      const verifyRes = await fetch('/api/auth/admin-verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password }),
-      });
-      if (!verifyRes.ok) {
-        throw new Error('Invalid admin credentials');
-      }
-      authenticatedUser = {
-        id: 'admin-001',
-        name: 'Naveen — Rapid Consultancy',
-        mobile: '7670870964',
-        role: 'admin',
-      };
-    } else if (role === 'staff') {
-      const { data, error } = await supabase.rpc('verify_staff_login', {
-        p_identifier: identifier,
-        p_password: password,
-      });
-
-      if (error) {
-        console.error('Staff login RPC error:', error);
-        throw new Error('Database connection failed. Please try again.');
-      }
-
-      if (data?.status === 'not_found') throw new Error('Staff member not found');
-      if (data?.status !== 'ok') throw new Error('Invalid password');
-
-      authenticatedUser = {
-        id: data.id,
-        name: data.name,
-        mobile: data.mobile,
-        role: 'staff',
-        branch: data.branch,
-      };
-    } else {
-      const { data, error } = await supabase.rpc('verify_customer_login', {
-        p_identifier: identifier,
-        p_password: password,
-      });
-
-      if (error) {
-        console.error('Customer login RPC error:', error);
-        throw new Error('Database connection failed. Please try again.');
-      }
-
-      if (data?.status === 'not_found') throw new Error('Account not found');
-      if (data?.status === 'deleted') throw new Error('This account has been deleted.');
-      if (data?.status !== 'ok') throw new Error('Invalid password');
-
-      authenticatedUser = {
-        id: data.id,
-        name: data.name,
-        mobile: data.mobile,
-        role: 'user',
-      };
+    if (!res.ok) {
+      throw new Error(data.error || 'Invalid credentials');
     }
 
-    setUser(authenticatedUser);
+    setUser(data.user);
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(storageKey, JSON.stringify(authenticatedUser));
-      if (role === 'admin') {
-        setAuthToken(adminAuthTokenValue);
-      } else if (role === 'staff') {
-        setAuthToken(staffAuthTokenValue);
-      } else {
-        setAuthToken(authTokenValue);
-      }
-      setAuthRole(role);
+      window.localStorage.setItem(storageKey, JSON.stringify(data.user));
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
     setUser(null);
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(storageKey);
-      removeAuthToken();
+    }
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // best-effort — the signed cookie also expires on its own
     }
   };
 

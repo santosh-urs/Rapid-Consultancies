@@ -1,18 +1,19 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { verifySessionToken, SESSION_COOKIE_NAME } from '@/lib/session';
 
 const protectedRoutes = ['/dashboard', '/profile', '/loans', '/loan-products'];
 const adminRoutes = ['/admin'];
 const staffRoutes = ['/staff/dashboard'];
 
-export function middleware(req: NextRequest) {
-  const token = req.cookies.get('auth_token')?.value;
-  const role = req.cookies.get('auth_role')?.value;
+export async function middleware(req: NextRequest) {
+  const session = await verifySessionToken(req.cookies.get(SESSION_COOKIE_NAME)?.value);
+  const role = session?.role ?? null;
   const pathname = req.nextUrl.pathname;
 
   // Admin routes
   if (pathname !== '/admin/login' && adminRoutes.some((route) => pathname.startsWith(route))) {
-    if (!(token && role === 'admin')) {
+    if (role !== 'admin') {
       const url = req.nextUrl.clone();
       url.pathname = '/admin/login';
       return NextResponse.redirect(url);
@@ -21,7 +22,7 @@ export function middleware(req: NextRequest) {
 
   // Staff routes
   if (staffRoutes.some((route) => pathname.startsWith(route))) {
-    if (!(token && role === 'staff')) {
+    if (role !== 'staff') {
       const url = req.nextUrl.clone();
       url.pathname = '/staff/login';
       return NextResponse.redirect(url);
@@ -30,7 +31,7 @@ export function middleware(req: NextRequest) {
 
   // Customer routes
   if (protectedRoutes.some((route) => pathname.startsWith(route))) {
-    if (!token) {
+    if (!role) {
       const url = req.nextUrl.clone();
       url.pathname = '/login';
       return NextResponse.redirect(url);
@@ -49,7 +50,7 @@ export function middleware(req: NextRequest) {
 
   // Root path: always show landing page (no redirect)
 
-  if (pathname === '/login' && token) {
+  if (pathname === '/login' && role) {
     const url = req.nextUrl.clone();
     if (role === 'admin') {
       url.pathname = '/admin/dashboard';
@@ -61,13 +62,13 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname === '/staff/login' && token && role === 'staff') {
+  if (pathname === '/staff/login' && role === 'staff') {
     const url = req.nextUrl.clone();
     url.pathname = '/staff/dashboard';
     return NextResponse.redirect(url);
   }
 
-  if (pathname === '/admin/login' && token && role === 'admin') {
+  if (pathname === '/admin/login' && role === 'admin') {
     const url = req.nextUrl.clone();
     url.pathname = '/admin/dashboard';
     return NextResponse.redirect(url);

@@ -722,15 +722,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Log in check redirect
-  useEffect(() => {
-    const token = document.cookie.split('; ').find(row => row.startsWith('auth_token='));
-    const role = document.cookie.split('; ').find(row => row.startsWith('auth_role='));
-    if (!token || !role || role.split('=')[1] !== 'admin') {
-      router.push('/admin/login');
-    }
-  }, [router]);
-
   const ltvRatio = useMemo(() => {
     if (loanFormEstimatedGoldValue === 0) return 0;
     return parseFloat(((loanFormPrincipal / loanFormEstimatedGoldValue) * 100).toFixed(1));

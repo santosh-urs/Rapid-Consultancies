@@ -300,14 +300,8 @@ export default function StaffDashboardPage() {
   const [sanctionBusinessYears, setSanctionBusinessYears] = useState<number | ''>('');
 
   useEffect(() => {
-    const token = document.cookie.split('; ').find(r => r.startsWith('auth_token='));
-    const role = document.cookie.split('; ').find(r => r.startsWith('auth_role='));
-    if (!token || !role || role.split('=')[1] !== 'staff') {
-      router.push('/staff/login');
-      return;
-    }
     fetchData();
-  }, [router]);
+  }, []);
 
   const fetchData = async () => {
     setIsLoading(true);
