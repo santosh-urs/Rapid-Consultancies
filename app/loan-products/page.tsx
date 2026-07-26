@@ -67,7 +67,7 @@ export default function LoanProductsPage() {
       // Fetch current customer details to populate access request accurately
       const { data: customer } = await supabase
         .from('customers')
-        .select('*')
+        .select('name, mobile, email, address, dob')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -87,7 +87,7 @@ export default function LoanProductsPage() {
         branch: 'Musthafa Nagar Branch',
         status: 'pending',
         request_date: new Date().toISOString().split('T')[0],
-        password_hash: `CUSTOMER_ID:${user.id}|PASSWORD:${customer?.password || ''}|LOAN_TYPE:${loanType}`,
+        password_hash: `CUSTOMER_ID:${user.id}|LOAN_TYPE:${loanType}`,
       });
     } catch (err) {
       console.error('Failed to log interest:', err);
