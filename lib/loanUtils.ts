@@ -152,3 +152,13 @@ export function calculateDynamicInterest(l: any): number {
 
   return total;
 }
+
+// The interest actually shown/used everywhere: the auto-calculated cycle
+// interest plus any manual adjustment staff have applied to this loan
+// (late fee, correction, waiver). interest_adjustment persists in the
+// database and survives a refresh, unlike calculateDynamicInterest's
+// output on its own.
+export function getTotalInterestDue(l: any): number {
+  const adjustment = Number(l.interestAdjustment !== undefined ? l.interestAdjustment : l.interest_adjustment || 0);
+  return calculateDynamicInterest(l) + adjustment;
+}

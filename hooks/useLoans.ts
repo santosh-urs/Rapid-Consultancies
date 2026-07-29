@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import {
   calculateDynamicInterest,
+  getTotalInterestDue,
   parseDateUTC,
   addDaysUTC,
   addMonthsUTC,
@@ -154,7 +155,7 @@ export function useLoans() {
             status: l.status,
             principal: Number(l.principal),
             outstanding: Number(l.outstanding),
-            interestDue: calculateDynamicInterest({
+            interestDue: getTotalInterestDue({
               ...l,
               loanType,
               tenureMonths,
@@ -200,6 +201,13 @@ export function useLoans() {
     };
 
     fetchLoans();
+
+    if (!user || user.role !== 'user') return;
+    const channel = supabase
+      .channel(`rt-customer-loans-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loans', filter: `customer_id=eq.${user.id}` }, fetchLoans)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [user]);
 
   return { data, isLoading };
@@ -238,7 +246,7 @@ export function useLoanDetail(loanId: string) {
             status: l.status,
             principal: Number(l.principal),
             outstanding: Number(l.outstanding),
-            interestDue: calculateDynamicInterest({
+            interestDue: getTotalInterestDue({
               ...l,
               loanType,
               tenureMonths,
@@ -332,6 +340,13 @@ export function useLoanDetail(loanId: string) {
     };
 
     fetchLoanDetail();
+
+    const channel = supabase
+      .channel(`rt-loan-detail-${loanId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loans', filter: `loan_id=eq.${loanId}` }, fetchLoanDetail)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loan_payments', filter: `loan_id=eq.${loanId}` }, fetchLoanDetail)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [loanId]);
 
   return { data, isLoading };

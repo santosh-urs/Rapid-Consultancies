@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { useToast } from '@/components/ui/Toast';
 import { supabase } from '@/lib/supabase';
-import { calculateDynamicInterest, addMonthsUTC, addDaysUTC, getTodayUTC, formatISODateOnly, inferTenureMonths, advanceNextDueDateFully } from '@/lib/loanUtils';
+import { calculateDynamicInterest, getTotalInterestDue, addMonthsUTC, addDaysUTC, getTodayUTC, formatISODateOnly, inferTenureMonths, advanceNextDueDateFully } from '@/lib/loanUtils';
 import { validateImageUpload } from '@/lib/fileUpload';
 import {
   LayoutDashboard,
@@ -32,7 +32,6 @@ import {
   Database,
   ShieldCheck,
   UserCog,
-  RefreshCw,
   XCircle,
   FileDown,
   Camera,
@@ -63,6 +62,7 @@ interface Loan {
   principal: number;
   outstanding: number;
   interestDue: number;
+  interestAdjustment: number;
   interestRate: number;
   nextDueDate: string;
   startDate: string;
@@ -236,7 +236,6 @@ export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'customers' | 'loans' | 'requests' | 'logs' | 'staff' | 'sanctions' | 'closures' | 'outstanding-edits'>('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isAccruing, setIsAccruing] = useState(false);
 
   // Database States
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -560,7 +559,8 @@ export default function AdminDashboardPage() {
           status: l.status,
           principal: Number(l.principal),
           outstanding: Number(l.outstanding),
-          interestDue: calculateDynamicInterest({ ...l, loanType, tenureMonths }),
+          interestDue: getTotalInterestDue({ ...l, loanType, tenureMonths }),
+          interestAdjustment: Number(l.interest_adjustment || 0),
           interestRate: Number(l.interest_rate),
           nextDueDate: l.next_due_date || '',
           startDate: l.start_date,
@@ -928,14 +928,25 @@ export default function AdminDashboardPage() {
         const { error } = await supabase.from('customers').update(custUpdate).eq('id', selectedCustomer.id);
         if (error) throw error;
 
-        const loanUpdates: Record<string, any> = { interest_due: custFormInterestAmount };
+        // custFormInterestAmount is the TOTAL interest the field showed (calculated +
+        // any existing adjustment). Store the delta as the new adjustment rather than
+        // writing the total to the unused interest_due column, so it actually persists
+        // and stays correct as the calculated portion changes over time.
+        const activeLoanForEdit = loans.find(l => l.customerId === selectedCustomer.id && (l.status === 'active' || l.status === 'overdue'));
+        const loanUpdates: Record<string, any> = {};
+        if (activeLoanForEdit) {
+          const calculatedPortion = activeLoanForEdit.interestDue - (activeLoanForEdit.interestAdjustment ?? 0);
+          loanUpdates.interest_adjustment = custFormInterestAmount - calculatedPortion;
+        }
         if (custFormInterestRate !== '') loanUpdates.interest_rate = Number(custFormInterestRate);
-        const { error: loanErr } = await supabase
-          .from('loans')
-          .update(loanUpdates)
-          .eq('customer_id', selectedCustomer.id)
-          .in('status', ['active', 'overdue']);
-        if (loanErr) throw loanErr;
+        if (Object.keys(loanUpdates).length > 0) {
+          const { error: loanErr } = await supabase
+            .from('loans')
+            .update(loanUpdates)
+            .eq('customer_id', selectedCustomer.id)
+            .in('status', ['active', 'overdue']);
+          if (loanErr) throw loanErr;
+        }
       }
 
       const updated = customers.map(c => {
@@ -958,15 +969,16 @@ export default function AdminDashboardPage() {
       });
       setCustomers(updated);
 
-      setLoans(prev => prev.map(l =>
-        l.customerId === selectedCustomer.id && (l.status === 'active' || l.status === 'overdue')
-          ? {
-              ...l,
-              interestDue: custFormInterestAmount,
-              interestRate: custFormInterestRate !== '' ? Number(custFormInterestRate) : l.interestRate,
-            }
-          : l
-      ));
+      setLoans(prev => prev.map(l => {
+        if (l.customerId !== selectedCustomer.id || (l.status !== 'active' && l.status !== 'overdue')) return l;
+        const calculatedPortion = l.interestDue - (l.interestAdjustment ?? 0);
+        return {
+          ...l,
+          interestDue: custFormInterestAmount,
+          interestAdjustment: custFormInterestAmount - calculatedPortion,
+          interestRate: custFormInterestRate !== '' ? Number(custFormInterestRate) : l.interestRate,
+        };
+      }));
 
       const rateNote = custFormInterestRate !== '' ? ` | Rate: ${custFormInterestRate}%` : '';
       await addAuditLog('Customer Updated', `Updated profile of customer ${custFormName} | Interest Amount: ₹${custFormInterestAmount}${rateNote}`);
@@ -1076,7 +1088,7 @@ export default function AdminDashboardPage() {
       status: 'active',
       principal: loanFormPrincipal,
       outstanding: loanFormPrincipal,
-      interestDue: calculateDynamicInterest({
+      interestDue: getTotalInterestDue({
         principal: loanFormPrincipal,
         interestRate: loanFormInterestRate,
         startDate: startDate.toISOString().split('T')[0],
@@ -1085,6 +1097,7 @@ export default function AdminDashboardPage() {
         tenureMonths: Number(loanFormTenure),
         status: 'active',
       }),
+      interestAdjustment: 0,
       interestRate: loanFormInterestRate,
       startDate: startDate.toISOString().split('T')[0],
       maturityDate: maturityDate.toISOString().split('T')[0],
@@ -1186,9 +1199,10 @@ export default function AdminDashboardPage() {
     setIsLoading(true);
 
     let updatedOutstanding = selectedLoan.outstanding;
-    let updatedInterestDue = selectedLoan.interestDue;
+    let updatedInterestDue = selectedLoan.interestDue; // calculated cycle interest + adjustment, combined
+    let updatedInterestAdjustment = selectedLoan.interestAdjustment ?? 0;
+    let updatedNextDueDate = selectedLoan.nextDueDate;
     let detailMsg = '';
-    const interestDueBefore = selectedLoan.interestDue;
 
     if (adjustType === 'payment') {
       if (adjustPaymentType === 'principal_only') {
@@ -1196,39 +1210,43 @@ export default function AdminDashboardPage() {
         updatedOutstanding = Math.max(0, updatedOutstanding - adjustAmount);
         detailMsg = `Recorded principal payment of ₹${adjustAmount.toLocaleString('en-IN')}. New principal balance: ₹${updatedOutstanding.toLocaleString('en-IN')}`;
       } else {
-        // Mixed: clear interest first, remainder goes to principal
+        // Mixed: clear interest first, remainder goes to principal.
+        // The calculated portion of interest only advances in whole cycles (via
+        // next_due_date), so a payment that fully clears the current total both
+        // advances the cycle and resets any adjustment. A payment that only
+        // partially clears it can't move the cycle forward — it's recorded as a
+        // (possibly negative) adjustment instead, which persists correctly since
+        // interest_adjustment is a real stored column, unlike the ignored
+        // interest_due used before this fix.
         let paymentLeft = adjustAmount;
-        if (paymentLeft <= updatedInterestDue) {
-          updatedInterestDue -= paymentLeft;
-        } else {
-          paymentLeft -= updatedInterestDue;
-          updatedInterestDue = 0;
-          updatedOutstanding = Math.max(0, updatedOutstanding - paymentLeft);
+        const interestPortion = Math.min(paymentLeft, updatedInterestDue);
+        if (interestPortion > 0) {
+          if (interestPortion >= updatedInterestDue) {
+            updatedNextDueDate = advanceNextDueDateFully(selectedLoan);
+            updatedInterestAdjustment = 0;
+          } else {
+            updatedInterestAdjustment -= interestPortion;
+          }
+          paymentLeft -= interestPortion;
         }
+        updatedInterestDue = Math.max(0, updatedInterestDue - interestPortion);
+        updatedOutstanding = Math.max(0, updatedOutstanding - paymentLeft);
         detailMsg = `Recorded payment of ₹${adjustAmount.toLocaleString('en-IN')}. New outstanding: ₹${updatedOutstanding.toLocaleString('en-IN')}`;
       }
     } else {
       updatedOutstanding += adjustAmount;
+      updatedInterestAdjustment += adjustInterest;
       updatedInterestDue += adjustInterest;
       detailMsg = `Accrued adjustments: Principal +₹${adjustAmount.toLocaleString('en-IN')}, Interest +₹${adjustInterest.toLocaleString('en-IN')}`;
     }
 
     const updatedStatus = updatedOutstanding === 0 && updatedInterestDue === 0 ? 'closed' : selectedLoan.status;
 
-    // interest_due is recomputed dynamically from next_due_date on every load (see fetchData),
-    // so a payment that fully clears the currently-due interest must advance next_due_date too —
-    // otherwise the "due" amount would silently reappear on the next refresh.
-    const clearedAllDueInterest = adjustType === 'payment' && adjustPaymentType !== 'principal_only'
-      && interestDueBefore > 0 && updatedInterestDue === 0;
-    const updatedNextDueDate = clearedAllDueInterest
-      ? advanceNextDueDateFully(selectedLoan)
-      : selectedLoan.nextDueDate;
-
     try {
       if (isSupabaseConfigured) {
         const { error } = await supabase.from('loans').update({
           outstanding: updatedOutstanding,
-          interest_due: updatedInterestDue,
+          interest_adjustment: updatedInterestAdjustment,
           next_due_date: updatedNextDueDate,
           status: updatedStatus,
         }).eq('id', selectedLoan.id);
@@ -1255,6 +1273,7 @@ export default function AdminDashboardPage() {
             ...l,
             outstanding: updatedOutstanding,
             interestDue: updatedInterestDue,
+            interestAdjustment: updatedInterestAdjustment,
             nextDueDate: updatedNextDueDate,
             status: updatedStatus as Loan['status'],
           };
@@ -1296,6 +1315,7 @@ export default function AdminDashboardPage() {
     // the full original principal, which overstated what was actually still owed).
     const newOutstanding = nextStatus === 'closed' ? 0 : (l.status === 'closed' ? 0 : l.outstanding);
     const newInterest = nextStatus === 'closed' ? 0 : (l.status === 'closed' ? 0 : l.interestDue);
+    const newInterestAdjustment = nextStatus === 'closed' ? 0 : (l.status === 'closed' ? 0 : (l.interestAdjustment ?? 0));
     setIsLoading(true);
 
     try {
@@ -1303,7 +1323,7 @@ export default function AdminDashboardPage() {
         const { error } = await supabase.from('loans').update({
           status: nextStatus,
           outstanding: newOutstanding,
-          interest_due: newInterest,
+          interest_adjustment: newInterestAdjustment,
         }).eq('id', l.id);
         if (error) throw error;
       }
@@ -1315,6 +1335,7 @@ export default function AdminDashboardPage() {
             status: nextStatus,
             outstanding: newOutstanding,
             interestDue: newInterest,
+            interestAdjustment: newInterestAdjustment,
           };
         }
         return item;
@@ -1334,99 +1355,12 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleAccrueInterest = async () => {
-    setIsAccruing(true);
-    try {
-      const todayStr = new Date().toISOString().split('T')[0];
-
-      // 1. Fetch the latest Interest Accrual log
-      const { data: logs, error: logErr } = await supabase
-        .from('audit_logs')
-        .select('timestamp')
-        .eq('action', 'Interest Accrual')
-        .order('timestamp', { ascending: false })
-        .limit(1);
-
-      if (logErr) throw logErr;
-
-      const lastRunDateStr = logs && logs.length > 0
-        ? new Date(logs[0].timestamp).toISOString().split('T')[0]
-        : null;
-
-      // 2. Fetch all active and overdue loans from database to ensure fresh data
-      const { data: dbLoans, error: loanErr } = await supabase
-        .from('loans')
-        .select('*')
-        .in('status', ['active', 'overdue']);
-
-      if (loanErr) throw loanErr;
-
-      const getDaysBetween = (dateStr1: string, dateStr2: string) => {
-        const d1 = new Date(dateStr1);
-        const d2 = new Date(dateStr2);
-        d1.setUTCHours(0, 0, 0, 0);
-        d2.setUTCHours(0, 0, 0, 0);
-        const diffMs = d2.getTime() - d1.getTime();
-        return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
-      };
-
-      let updatedCount = 0;
-      let totalAccrued = 0;
-
-      const updatePromises = dbLoans.map(async (loan: any) => {
-        const baselineDateStr = lastRunDateStr && new Date(lastRunDateStr) > new Date(loan.start_date)
-          ? lastRunDateStr
-          : loan.start_date;
-
-        const elapsedDays = getDaysBetween(baselineDateStr, todayStr);
-        if (elapsedDays <= 0) return;
-
-        const principalBasis = Number(loan.principal);
-        const rate = Number(loan.interest_rate);
-        const accrued = Math.round(principalBasis * (rate / 100) * (elapsedDays / 365));
-
-        if (accrued > 0) {
-          const newInterestDue = Number(loan.interest_due || 0) + accrued;
-          const { error: updateErr } = await supabase
-            .from('loans')
-            .update({ interest_due: newInterestDue })
-            .eq('id', loan.id);
-
-          if (updateErr) {
-            console.error(`Error updating loan ${loan.loan_id}:`, updateErr);
-          } else {
-            updatedCount++;
-            totalAccrued += accrued;
-          }
-        }
-      });
-
-      await Promise.all(updatePromises);
-
-      // 3. Log the process in audit_logs
-      if (updatedCount > 0 || totalAccrued > 0 || !lastRunDateStr) {
-        await supabase
-          .from('audit_logs')
-          .insert({
-            id: `log-accrual-${Date.now()}`,
-            timestamp: new Date().toISOString(),
-            action: 'Interest Accrual',
-            details: `Accrued interest manually. Updated ${updatedCount} loans. Total accrued: ₹${totalAccrued.toLocaleString('en-IN')}. Date: ${todayStr}`,
-            admin: user?.name ?? 'Admin'
-          });
-      }
-
-      toast.push(`Interest accrual completed. Accrued ₹${totalAccrued.toLocaleString('en-IN')} across ${updatedCount} loans.`);
-      
-      // Reload dashboard data
-      fetchData();
-    } catch (err: any) {
-      console.error(err);
-      toast.push(`Failed to accrue interest: ${err.message}`);
-    } finally {
-      setIsAccruing(false);
-    }
-  };
+  // Bulk day-by-day interest accrual was removed: interest is calculated
+  // automatically and continuously by getTotalInterestDue()/calculateDynamicInterest()
+  // from each loan's principal/rate/dates, so manually accruing it into the
+  // legacy interest_due column had nothing left to do — that column stopped
+  // being read for display back when the dynamic calculation was introduced,
+  // so every run of this button silently vanished on the next page load.
 
   const handleApproveRequest = async (req: AccessRequest) => {
     setIsLoading(true);
@@ -1449,6 +1383,7 @@ export default function AdminDashboardPage() {
           principal: 10000,
           outstanding: 10000,
           interestDue: 0,
+          interestAdjustment: 0,
           interestRate: 9.5,
           startDate: startDate.toISOString().split('T')[0],
           maturityDate: maturityDate.toISOString().split('T')[0],
@@ -1793,7 +1728,7 @@ export default function AdminDashboardPage() {
       status: 'active',
       principal: req.principal,
       outstanding: req.principal + (req.processingFee || 0),
-      interestDue: calculateDynamicInterest({
+      interestDue: getTotalInterestDue({
         principal: req.principal,
         interestRate: req.interestRate,
         startDate: startDate.toISOString().split('T')[0],
@@ -1802,6 +1737,7 @@ export default function AdminDashboardPage() {
         tenureMonths: req.tenureMonths || 6,
         status: 'active',
       }),
+      interestAdjustment: 0,
       interestRate: req.interestRate,
       startDate: startDate.toISOString().split('T')[0],
       maturityDate: maturityDate.toISOString().split('T')[0],
@@ -2361,15 +2297,6 @@ export default function AdminDashboardPage() {
           >
             {showClosedLoans ? 'Hide Closed' : 'Show Closed'}
           </button>
-          <Button
-            variant="outline"
-            onClick={handleAccrueInterest}
-            disabled={isAccruing || isLoading}
-            className="flex items-center gap-2 py-2.5 border-[#E5E5E5] hover:bg-surface text-text font-semibold rounded-2xl"
-          >
-            <RefreshCw className={`h-4 w-4 ${isAccruing ? 'animate-spin' : ''}`} />
-            {isAccruing ? 'Accruing...' : 'Accrue Interest'}
-          </Button>
         </div>
       </div>
 

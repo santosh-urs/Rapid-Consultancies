@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { validateImageUpload } from '@/lib/fileUpload';
 import {
   calculateDynamicInterest,
+  getTotalInterestDue,
   parseDateUTC,
   getTodayUTC,
   addDaysUTC,
@@ -301,6 +302,13 @@ export default function StaffDashboardPage() {
 
   useEffect(() => {
     fetchData();
+    const tables = ['customers', 'loans', 'loan_sanction_requests', 'loan_close_requests', 'outstanding_edit_requests'];
+    const channels = tables.map(table =>
+      supabase.channel(`rt-staff-${table}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table }, fetchData)
+        .subscribe()
+    );
+    return () => { channels.forEach(c => supabase.removeChannel(c)); };
   }, []);
 
   const fetchData = async () => {
@@ -365,7 +373,7 @@ export default function StaffDashboardPage() {
             status: l.status,
             principal: Number(l.principal),
             outstanding: Number(l.outstanding),
-            interestDue: calculateDynamicInterest({
+            interestDue: getTotalInterestDue({
               ...l,
               loanType,
               tenureMonths,
