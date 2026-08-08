@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { useToast } from '@/components/ui/Toast';
 import { supabase } from '@/lib/supabase';
-import { calculateDynamicInterest, getTotalInterestDue, addMonthsUTC, addDaysUTC, getTodayUTC, formatISODateOnly, inferTenureMonths, advanceNextDueDateFully } from '@/lib/loanUtils';
+import { calculateDynamicInterest, getTotalInterestDue, generatePaymentSchedule, addMonthsUTC, addDaysUTC, getTodayUTC, formatISODateOnly, inferTenureMonths, advanceNextDueDateFully, type MonthAdjustment, type ScheduleRow } from '@/lib/loanUtils';
 import { validateImageUpload } from '@/lib/fileUpload';
 import {
   LayoutDashboard,
@@ -74,6 +74,16 @@ interface Loan {
   branch: string;
   loanType: string;
   tenureMonths: number;
+}
+
+// A staff-applied charge tied to one specific instalment of a loan (e.g. a
+// late fee for a missed month), stored in loan_interest_adjustments. Extends
+// MonthAdjustment (due_date/amount/reason) with the DB row's own id/loanId/
+// createdAt so it can be listed and keyed in the UI.
+interface LoanInterestAdjustmentRow extends MonthAdjustment {
+  id: string;
+  loanId: string;
+  createdAt: string;
 }
 
 interface AccessRequest {
@@ -241,6 +251,8 @@ export default function AdminDashboardPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [showDeletedCustomers, setShowDeletedCustomers] = useState(false);
   const [loans, setLoans] = useState<Loan[]>([]);
+  // Per-month interest charges (loan_interest_adjustments), grouped by loan id.
+  const [monthAdjustmentsByLoan, setMonthAdjustmentsByLoan] = useState<Record<string, LoanInterestAdjustmentRow[]>>({});
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
@@ -346,6 +358,12 @@ export default function AdminDashboardPage() {
   const [adjustType, setAdjustType] = useState<'payment' | 'accrual'>('payment');
   const [adjustPaymentType, setAdjustPaymentType] = useState<'mixed' | 'principal_only'>('mixed');
   const [adjustDescription, setAdjustDescription] = useState('');
+
+  // Form States - Per-month interest charge (loan_interest_adjustments)
+  const [chargeRowDueDate, setChargeRowDueDate] = useState<string | null>(null);
+  const [chargeAmount, setChargeAmount] = useState<number>(0);
+  const [chargeReason, setChargeReason] = useState('');
+  const [isAddingCharge, setIsAddingCharge] = useState(false);
 
   const generateCustomerPdf = async (customer: Customer, loan: Loan | null) => {
     // Use customer-level processing fee (editable by admin); fall back to sanction request lookup
@@ -521,7 +539,7 @@ export default function AdminDashboardPage() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [custRes, loanRes, reqRes, logRes, staffRes, sanctRes, closeRes, outstandingEditRes] = await Promise.all([
+      const [custRes, loanRes, reqRes, logRes, staffRes, sanctRes, closeRes, outstandingEditRes, monthAdjRes] = await Promise.all([
         supabase.from('customers').select('*'),
         supabase.from('loans').select('*'),
         supabase.from('access_requests').select('*'),
@@ -530,12 +548,31 @@ export default function AdminDashboardPage() {
         supabase.from('loan_sanction_requests').select('*').order('requested_date', { ascending: false }),
         supabase.from('loan_close_requests').select('*').order('requested_at', { ascending: false }),
         supabase.from('outstanding_edit_requests').select('*').order('requested_at', { ascending: false }),
+        supabase.from('loan_interest_adjustments').select('*').order('due_date', { ascending: true }),
       ]);
 
       if (custRes.error) throw custRes.error;
       if (loanRes.error) throw loanRes.error;
       if (reqRes.error) throw reqRes.error;
       if (logRes.error) throw logRes.error;
+
+      // Group per-month interest charges by loan id so both the interestDue
+      // totals below and the per-loan schedule view can look them up.
+      const monthAdjByLoan: Record<string, LoanInterestAdjustmentRow[]> = {};
+      if (!monthAdjRes?.error && monthAdjRes?.data) {
+        for (const row of monthAdjRes.data as any[]) {
+          const entry: LoanInterestAdjustmentRow = {
+            id: row.id,
+            loanId: row.loan_id,
+            due_date: row.due_date,
+            amount: Number(row.amount || 0),
+            reason: row.reason || null,
+            createdAt: row.created_at,
+          };
+          (monthAdjByLoan[row.loan_id] ||= []).push(entry);
+        }
+      }
+      setMonthAdjustmentsByLoan(monthAdjByLoan);
 
       setCustomers((custRes.data || []).map((c: any) => ({
         id: c.id, name: c.name, mobile: c.mobile, email: c.email,
@@ -559,7 +596,7 @@ export default function AdminDashboardPage() {
           status: l.status,
           principal: Number(l.principal),
           outstanding: Number(l.outstanding),
-          interestDue: getTotalInterestDue({ ...l, loanType, tenureMonths }),
+          interestDue: getTotalInterestDue({ ...l, loanType, tenureMonths }, monthAdjByLoan[l.id] || []),
           interestAdjustment: Number(l.interest_adjustment || 0),
           interestRate: Number(l.interest_rate),
           nextDueDate: l.next_due_date || '',
@@ -686,7 +723,7 @@ export default function AdminDashboardPage() {
   // Initial load + real-time subscriptions for all tables
   useEffect(() => {
     fetchData();
-    const tables = ['customers', 'loans', 'access_requests', 'audit_logs', 'staff', 'loan_sanction_requests', 'loan_close_requests', 'outstanding_edit_requests'];
+    const tables = ['customers', 'loans', 'access_requests', 'audit_logs', 'staff', 'loan_sanction_requests', 'loan_close_requests', 'outstanding_edit_requests', 'loan_interest_adjustments'];
     const channels = tables.map(table =>
       supabase.channel(`rt-admin-${table}`)
         .on('postgres_changes', { event: '*', schema: 'public', table }, fetchData)
@@ -726,6 +763,13 @@ export default function AdminDashboardPage() {
     if (loanFormEstimatedGoldValue === 0) return 0;
     return parseFloat(((loanFormPrincipal / loanFormEstimatedGoldValue) * 100).toFixed(1));
   }, [loanFormPrincipal, loanFormEstimatedGoldValue]);
+
+  // Month-by-month schedule for the loan currently open in the Adjust modal,
+  // with its per-month interest charges folded into the matching row.
+  const selectedLoanSchedule = useMemo<ScheduleRow[]>(() => {
+    if (!selectedLoan) return [];
+    return generatePaymentSchedule(selectedLoan, monthAdjustmentsByLoan[selectedLoan.id] || []);
+  }, [selectedLoan, monthAdjustmentsByLoan]);
 
   // Summary Metrics
   const totalOutstanding = useMemo(() => {
@@ -1190,7 +1234,73 @@ export default function AdminDashboardPage() {
     setAdjustType('payment');
     setAdjustPaymentType('mixed');
     setAdjustDescription('');
+    setChargeRowDueDate(null);
+    setChargeAmount(0);
+    setChargeReason('');
     setIsAdjustLoanOpen(true);
+  };
+
+  // Adds a staff charge (extra interest/late fee) tied to one specific
+  // instalment of selectedLoan, via loan_interest_adjustments. Additive to —
+  // and kept separate from — the whole-loan interest_adjustment column used
+  // by handleEditCustomerSubmit; both mechanisms remain in effect together.
+  const handleAddMonthCharge = async (row: ScheduleRow) => {
+    if (!selectedLoan) return;
+    if (!chargeAmount || chargeAmount <= 0) {
+      toast.push('Enter a charge amount greater than 0.');
+      return;
+    }
+    setIsAddingCharge(true);
+    try {
+      // Client-generated id matches this file's existing insert pattern
+      // (e.g. audit logs, payments) rather than relying on a Prefer:
+      // return=representation round-trip to read the DB-assigned id back.
+      const newId = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const reason = chargeReason.trim() || null;
+
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from('loan_interest_adjustments').insert({
+          id: newId,
+          loan_id: selectedLoan.id,
+          due_date: row.dueDate,
+          amount: chargeAmount,
+          reason,
+        });
+        if (error) throw error;
+      }
+
+      const newEntry: LoanInterestAdjustmentRow = {
+        id: newId,
+        loanId: selectedLoan.id,
+        due_date: row.dueDate,
+        amount: chargeAmount,
+        reason,
+        createdAt: new Date().toISOString(),
+      };
+
+      setMonthAdjustmentsByLoan(prev => ({
+        ...prev,
+        [selectedLoan.id]: [...(prev[selectedLoan.id] || []), newEntry],
+      }));
+      setLoans(prev => prev.map(l => l.id === selectedLoan.id ? { ...l, interestDue: l.interestDue + chargeAmount } : l));
+      setSelectedLoan(prev => (prev && prev.id === selectedLoan.id) ? { ...prev, interestDue: prev.interestDue + chargeAmount } : prev);
+
+      await addAuditLog(
+        'Interest Charge Added',
+        `Added ₹${chargeAmount.toLocaleString('en-IN')} charge to loan ${selectedLoan.loanId} for instalment due ${row.dueDate}${reason ? ` — ${reason}` : ''}`
+      );
+      toast.push(`Charge of ₹${chargeAmount.toLocaleString('en-IN')} added to ${row.dueDate}.`);
+      setChargeRowDueDate(null);
+      setChargeAmount(0);
+      setChargeReason('');
+    } catch (err: any) {
+      console.error(err);
+      toast.push('Failed to add charge: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsAddingCharge(false);
+    }
   };
 
   const handleAdjustLoanSubmit = async (e: React.FormEvent) => {
@@ -4185,7 +4295,7 @@ export default function AdminDashboardPage() {
       {/* Adjust Outstanding Modal */}
       {isAdjustLoanOpen && selectedLoan && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-white rounded-3xl border border-[#E5E5E5] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.25),0_8px_24px_-4px_rgba(0,0,0,0.12)] ring-1 ring-black/5 max-w-md w-full overflow-hidden">
+          <div className="bg-white rounded-3xl border border-[#E5E5E5] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.25),0_8px_24px_-4px_rgba(0,0,0,0.12)] ring-1 ring-black/5 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-5 border-b border-[#E5E5E5] flex justify-between items-center">
               <div>
                 <h3 className="text-lg font-bold text-text">Adjust Loan Balance</h3>
@@ -4213,6 +4323,106 @@ export default function AdminDashboardPage() {
                   <span>Total Outstanding:</span>
                   <span className="font-bold">₹{(selectedLoan.outstanding + selectedLoan.interestDue).toLocaleString('en-IN')}</span>
                 </div>
+              </div>
+
+              {/* Payment Schedule & Per-Month Interest Charges */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">
+                  Payment Schedule
+                </label>
+                <div className="rounded-2xl border border-[#E5E5E5] overflow-hidden">
+                  <div className="max-h-56 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-surface sticky top-0">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-semibold text-[#888888]">#</th>
+                          <th className="px-3 py-2 text-left font-semibold text-[#888888]">Due Date</th>
+                          <th className="px-3 py-2 text-left font-semibold text-[#888888]">Interest</th>
+                          <th className="px-3 py-2 text-left font-semibold text-[#888888]">Status</th>
+                          <th className="px-3 py-2 text-right font-semibold text-[#888888]">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#F0F0F0]">
+                        {selectedLoanSchedule.map(row => (
+                          <Fragment key={row.dueDate}>
+                            <tr>
+                              <td className="px-3 py-2 text-text">{row.instalment}</td>
+                              <td className="px-3 py-2 text-text whitespace-nowrap">{row.dueDate}</td>
+                              <td className="px-3 py-2 text-text">₹{row.interest.toLocaleString('en-IN')}</td>
+                              <td className="px-3 py-2 capitalize">
+                                <span className={
+                                  row.status === 'paid' ? 'text-emerald-600 font-medium' :
+                                  row.status === 'due' ? 'text-rose-600 font-medium' : 'text-[#888888]'
+                                }>
+                                  {row.status}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <button
+                                  type="button"
+                                  className="text-brand text-[11px] font-semibold hover:underline"
+                                  onClick={() => {
+                                    setChargeRowDueDate(chargeRowDueDate === row.dueDate ? null : row.dueDate);
+                                    setChargeAmount(0);
+                                    setChargeReason('');
+                                  }}
+                                >
+                                  {chargeRowDueDate === row.dueDate ? 'Cancel' : '+ Add Charge'}
+                                </button>
+                              </td>
+                            </tr>
+                            {row.extraCharge > 0 && (
+                              <tr>
+                                <td colSpan={5} className="px-3 pb-2 text-[11px] text-rose-600">
+                                  +₹{row.extraCharge.toLocaleString('en-IN')} added{row.extraChargeReason ? ` — ${row.extraChargeReason}` : ''}
+                                </td>
+                              </tr>
+                            )}
+                            {chargeRowDueDate === row.dueDate && (
+                              <tr>
+                                <td colSpan={5} className="px-3 pb-3 bg-surface/60">
+                                  <div className="flex flex-wrap gap-2 items-center pt-2">
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      placeholder="Amount (₹)"
+                                      value={chargeAmount || ''}
+                                      onChange={e => setChargeAmount(Number(e.target.value))}
+                                      className="w-28 rounded-lg border border-[#E5E5E5] px-2 py-1.5 text-xs focus:border-brand focus:ring-1 focus:ring-brand"
+                                    />
+                                    <input
+                                      type="text"
+                                      placeholder="Reason (e.g. missed June payment)"
+                                      value={chargeReason}
+                                      onChange={e => setChargeReason(e.target.value)}
+                                      className="flex-1 min-w-[10rem] rounded-lg border border-[#E5E5E5] px-2 py-1.5 text-xs focus:border-brand focus:ring-1 focus:ring-brand"
+                                    />
+                                    <Button
+                                      type="button"
+                                      className="text-[11px] py-1.5 px-3 rounded-lg"
+                                      disabled={isAddingCharge}
+                                      onClick={() => handleAddMonthCharge(row)}
+                                    >
+                                      {isAddingCharge ? 'Saving…' : 'Save Charge'}
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        ))}
+                        {selectedLoanSchedule.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="px-3 py-4 text-center text-[#888888]">No schedule available for this loan.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <p className="text-[11px] text-[#888888] mt-1.5">
+                  Charges added here are additive on top of any whole-loan interest adjustment made via the customer&apos;s profile edit form.
+                </p>
               </div>
 
               <div>

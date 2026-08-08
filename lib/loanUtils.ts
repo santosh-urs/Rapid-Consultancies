@@ -153,12 +153,116 @@ export function calculateDynamicInterest(l: any): number {
   return total;
 }
 
+// A staff-applied charge tied to one specific instalment (e.g. a late fee for
+// a month the customer didn't pay), stored in loan_interest_adjustments and
+// keyed by due_date so it lands on the matching ScheduleRow.
+export interface MonthAdjustment {
+  due_date: string;
+  amount: number;
+  reason?: string | null;
+}
+
+function sumAdjustments(adjustments: MonthAdjustment[]): number {
+  return adjustments.reduce((sum, a) => sum + Number(a.amount || 0), 0);
+}
+
 // The interest actually shown/used everywhere: the auto-calculated cycle
 // interest plus any manual adjustment staff have applied to this loan
 // (late fee, correction, waiver). interest_adjustment persists in the
 // database and survives a refresh, unlike calculateDynamicInterest's
-// output on its own.
-export function getTotalInterestDue(l: any): number {
+// output on its own. monthAdjustments are additional per-instalment charges
+// from loan_interest_adjustments (staff tagging a specific month), separate
+// from the whole-loan interest_adjustment column.
+export function getTotalInterestDue(l: any, monthAdjustments: MonthAdjustment[] = []): number {
   const adjustment = Number(l.interestAdjustment !== undefined ? l.interestAdjustment : l.interest_adjustment || 0);
-  return calculateDynamicInterest(l) + adjustment;
+  return calculateDynamicInterest(l) + adjustment + sumAdjustments(monthAdjustments);
+}
+
+export interface ScheduleRow {
+  instalment: number;
+  dueDate: string;
+  interest: number;
+  extraCharge: number;
+  extraChargeReason: string | null;
+  principal: number;
+  total: number;
+  status: 'paid' | 'due' | 'upcoming';
+}
+
+// Month-by-month instalment schedule for a loan, with any per-month staff
+// charges (monthAdjustments) folded into the matching row via due_date.
+// Mirrors calculateDynamicInterest's due/cleared logic so "status" here stays
+// consistent with what calculateDynamicInterest counts as owed.
+export function generatePaymentSchedule(l: any, monthAdjustments: MonthAdjustment[] = []): ScheduleRow[] {
+  const principal = Number(l.principal || 0);
+  const interestRate = Number(l.interestRate !== undefined ? l.interestRate : l.interest_rate || 0);
+  const startDate = l.startDate || l.start_date;
+  const nextDueDate = l.nextDueDate || l.next_due_date || '';
+  const goldWeight = Number(l.goldWeight !== undefined ? l.goldWeight : l.gold_weight || 0);
+  const loanType = l.loanType || l.loan_type || (goldWeight > 0 ? 'Gold Loan' : 'Loan');
+
+  if (!l || !startDate || principal <= 0) return [];
+
+  let tenureMonths = l.tenureMonths !== undefined ? Number(l.tenureMonths) : Number(l.tenure_months || 0);
+  if (!tenureMonths && startDate && (l.maturityDate || l.maturity_date)) {
+    tenureMonths = inferTenureMonths(startDate, l.maturityDate || l.maturity_date);
+  }
+
+  const today = getTodayUTC();
+  const start = parseDateUTC(startDate);
+  const nextDue = nextDueDate ? parseDateUTC(nextDueDate) : null;
+  const isClosed = l.status === 'closed';
+
+  const chargesFor = (dueDateISO: string) => {
+    const matches = monthAdjustments.filter(a => a.due_date === dueDateISO);
+    return {
+      extraCharge: sumAdjustments(matches),
+      extraChargeReason: matches.map(a => a.reason).filter(Boolean).join('; ') || null,
+    };
+  };
+
+  if (loanType === 'Weekly Loan') {
+    const weeklyInterest = Math.round((principal * (interestRate / 100)) / 4);
+    const weeklyPrincipal = Math.round(principal / 4);
+    return Array.from({ length: 4 }, (_, i) => {
+      const dueDate = addDaysUTC(start, 7 * (i + 1));
+      const dueDateISO = formatISODateOnly(dueDate);
+      const isCleared = isClosed || (nextDue ? dueDate < nextDue : false);
+      const status: ScheduleRow['status'] = isCleared ? 'paid' : dueDate <= today ? 'due' : 'upcoming';
+      const { extraCharge, extraChargeReason } = chargesFor(dueDateISO);
+      return {
+        instalment: i + 1,
+        dueDate: dueDateISO,
+        interest: weeklyInterest,
+        extraCharge,
+        extraChargeReason,
+        principal: weeklyPrincipal,
+        total: weeklyInterest + extraCharge + weeklyPrincipal,
+        status,
+      };
+    });
+  }
+
+  if (tenureMonths <= 0) return [];
+
+  const monthlyInterest = Math.round(principal * (interestRate / 100 / 12));
+  return Array.from({ length: tenureMonths }, (_, i) => {
+    const dueDate = addMonthsUTC(start, i + 1);
+    const dueDateISO = formatISODateOnly(dueDate);
+    const isCleared = isClosed || (nextDue ? dueDate < nextDue : false);
+    const isLast = i === tenureMonths - 1;
+    const princ = isLast ? principal : 0;
+    const status: ScheduleRow['status'] = isCleared ? 'paid' : dueDate <= today ? 'due' : 'upcoming';
+    const { extraCharge, extraChargeReason } = chargesFor(dueDateISO);
+    return {
+      instalment: i + 1,
+      dueDate: dueDateISO,
+      interest: monthlyInterest,
+      extraCharge,
+      extraChargeReason,
+      principal: princ,
+      total: monthlyInterest + extraCharge + princ,
+      status,
+    };
+  });
 }
