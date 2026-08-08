@@ -19,6 +19,7 @@ import {
   formatISODateOnly,
   getLocalISODate,
   inferTenureMonths,
+  type MonthAdjustment,
 } from '@/lib/loanUtils';
 import {
   LayoutDashboard,
@@ -302,7 +303,7 @@ export default function StaffDashboardPage() {
 
   useEffect(() => {
     fetchData();
-    const tables = ['customers', 'loans', 'loan_sanction_requests', 'loan_close_requests', 'outstanding_edit_requests'];
+    const tables = ['customers', 'loans', 'loan_sanction_requests', 'loan_close_requests', 'outstanding_edit_requests', 'loan_interest_adjustments'];
     const channels = tables.map(table =>
       supabase.channel(`rt-staff-${table}`)
         .on('postgres_changes', { event: '*', schema: 'public', table }, fetchData)
@@ -333,16 +334,25 @@ export default function StaffDashboardPage() {
           }
         }
 
-        const [custRes, loanRes, sanctionRes, closeRes, outstandingEditRes] = await Promise.all([
+        const [custRes, loanRes, sanctionRes, closeRes, outstandingEditRes, monthAdjRes] = await Promise.all([
           supabase.from('customers').select('*'),
           supabase.from('loans').select('*'),
           supabase.from('loan_sanction_requests').select('*').order('requested_date', { ascending: false }),
           supabase.from('loan_close_requests').select('*').order('requested_at', { ascending: false }),
           supabase.from('outstanding_edit_requests').select('*').order('requested_at', { ascending: false }),
+          supabase.from('loan_interest_adjustments').select('loan_id,due_date,amount,reason'),
         ]);
 
         if (custRes.error) throw custRes.error;
         if (loanRes.error) throw loanRes.error;
+
+        // Per-month interest charges (loan_interest_adjustments), grouped by loan id.
+        const monthAdjByLoan: Record<string, MonthAdjustment[]> = {};
+        if (!monthAdjRes.error) {
+          for (const row of (monthAdjRes.data || []) as any[]) {
+            (monthAdjByLoan[row.loan_id] ||= []).push(row);
+          }
+        }
 
         const filteredCusts = (custRes.data || []).filter((c: any) => !(c.password?.startsWith('DELETED_') ?? false));
         setCustomers(filteredCusts.map((c: any) => ({
@@ -377,7 +387,7 @@ export default function StaffDashboardPage() {
               ...l,
               loanType,
               tenureMonths,
-            }),
+            }, monthAdjByLoan[l.id] || []),
             interestRate: Number(l.interest_rate),
             nextDueDate: l.next_due_date || '',
             startDate: l.start_date,

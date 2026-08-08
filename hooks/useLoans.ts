@@ -11,7 +11,23 @@ import {
   addMonthsUTC,
   formatISODateOnly,
   inferTenureMonths,
+  type MonthAdjustment,
 } from '@/lib/loanUtils';
+
+// Groups loan_interest_adjustments rows (per-month staff charges) by loan id.
+async function fetchMonthAdjustmentsByLoan(loanDbIds: string[]): Promise<Record<string, MonthAdjustment[]>> {
+  if (loanDbIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from('loan_interest_adjustments')
+    .select('loan_id,due_date,amount,reason')
+    .in('loan_id', loanDbIds);
+  if (error || !data) return {};
+  const grouped: Record<string, MonthAdjustment[]> = {};
+  for (const row of data as any[]) {
+    (grouped[row.loan_id] ||= []).push(row);
+  }
+  return grouped;
+}
 
 export interface LoanSummary {
   id: string;
@@ -142,6 +158,8 @@ export function useLoans() {
 
         if (loansErr) throw loansErr;
 
+        const monthAdjByLoan = await fetchMonthAdjustmentsByLoan((dbLoans || []).map((l: any) => l.id));
+
         const mappedLoans: LoanSummary[] = (dbLoans || []).map((l: any) => {
           const goldWeight = Number(l.gold_weight);
           const loanType = l.loan_type || (goldWeight > 0 ? 'Gold Loan' : 'Loan');
@@ -159,7 +177,7 @@ export function useLoans() {
               ...l,
               loanType,
               tenureMonths,
-            }),
+            }, monthAdjByLoan[l.id] || []),
             interestRate: Number(l.interest_rate),
             nextDueDate: l.next_due_date || '',
             startDate: l.start_date,
@@ -206,6 +224,12 @@ export function useLoans() {
     const channel = supabase
       .channel(`rt-customer-loans-${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'loans', filter: `customer_id=eq.${user.id}` }, fetchLoans)
+      .on('postgres_changes',
+        // No customer_id column on this table to filter by — refetch on any change and let
+        // fetchLoans re-scope to this customer's own loan ids.
+        { event: '*', schema: 'public', table: 'loan_interest_adjustments' },
+        fetchLoans
+      )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user]);
@@ -240,6 +264,9 @@ export function useLoanDetail(loanId: string) {
           const goldWeight = Number(l.gold_weight);
           const loanType = l.loan_type || (goldWeight > 0 ? 'Gold Loan' : 'Loan');
 
+          const monthAdjustments = await fetchMonthAdjustmentsByLoan([l.id]);
+          const loanMonthAdjustments = monthAdjustments[l.id] || [];
+
           const mappedDetail: LoanDetail = {
             id: l.id,
             loanId: l.loan_id,
@@ -250,7 +277,7 @@ export function useLoanDetail(loanId: string) {
               ...l,
               loanType,
               tenureMonths,
-            }),
+            }, loanMonthAdjustments),
             interestRate: Number(l.interest_rate),
             nextDueDate: l.next_due_date || '',
             startDate: l.start_date,
@@ -299,8 +326,17 @@ export function useLoanDetail(loanId: string) {
 
           const uniqueScheduled = scheduleHistory.slice(actualInstallmentCount);
 
+          // Surface each per-month staff charge as its own visible line, rather than
+          // only folding it silently into interestDue above — the reason a customer's
+          // interest went up for a given month should be visible, not just the total.
+          const chargeEntries = loanMonthAdjustments.map((adj) => ({
+            date: adj.due_date,
+            amount: Number(adj.amount || 0),
+            status: `Interest Charge Added${adj.reason ? `: ${adj.reason}` : ''}`,
+          }));
+
           // Merge and sort by date (oldest first)
-          const merged = [...uniqueScheduled, ...paymentRecords].sort(
+          const merged = [...uniqueScheduled, ...paymentRecords, ...chargeEntries].sort(
             (a, b) => parseDateUTC(a.date).getTime() - parseDateUTC(b.date).getTime()
           );
 
@@ -345,6 +381,13 @@ export function useLoanDetail(loanId: string) {
       .channel(`rt-loan-detail-${loanId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'loans', filter: `loan_id=eq.${loanId}` }, fetchLoanDetail)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'loan_payments', filter: `loan_id=eq.${loanId}` }, fetchLoanDetail)
+      .on('postgres_changes',
+        // loan_interest_adjustments.loan_id references the loan's db id, not this
+        // human-readable loanId, which isn't known until after the first fetch —
+        // refetch on any change and let fetchLoanDetail re-scope to this loan.
+        { event: '*', schema: 'public', table: 'loan_interest_adjustments' },
+        fetchLoanDetail
+      )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [loanId]);
