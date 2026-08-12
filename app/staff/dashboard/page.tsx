@@ -376,8 +376,9 @@ export default function StaffDashboardPage() {
 
           if (staffErr || !currentStaff || !currentStaff.is_active) {
             toast.push('Your staff account has been deleted or deactivated.');
-            logout();
+            await logout();
             router.push('/staff/login');
+            router.refresh();
             return;
           }
         }
@@ -986,9 +987,10 @@ export default function StaffDashboardPage() {
     }
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     router.push('/staff/login');
+    router.refresh();
   };
 
   // Deduplicated customer list (normalize +91 / 0 prefix — keep newest per mobile)

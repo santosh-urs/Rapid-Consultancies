@@ -18,6 +18,30 @@ const securityHeaders = [
   },
 ];
 
+// Session-gated pages must never be served from the browser's back/forward
+// cache (bfcache) or any HTTP cache — otherwise pressing Back after logout
+// can restore the last-rendered authenticated page from memory without
+// re-running middleware or any auth check. `no-store` opts these routes out
+// of bfcache entirely, forcing a fresh navigation (and therefore a fresh
+// middleware/session check) every time.
+const noStoreHeaders = [{ key: 'Cache-Control', value: 'no-store, must-revalidate' }];
+const authGatedSources = [
+  '/admin/dashboard',
+  '/admin/dashboard/:path*',
+  '/staff/dashboard',
+  '/staff/dashboard/:path*',
+  '/dashboard',
+  '/dashboard/:path*',
+  '/profile',
+  '/profile/:path*',
+  '/loans',
+  '/loans/:path*',
+  '/loan-products',
+  '/loan-products/:path*',
+  '/repledge',
+  '/repledge/:path*',
+];
+
 const nextConfig = {
   reactStrictMode: true,
   async headers() {
@@ -26,6 +50,7 @@ const nextConfig = {
         source: '/:path*',
         headers: securityHeaders,
       },
+      ...authGatedSources.map((source) => ({ source, headers: noStoreHeaders })),
     ];
   },
 };

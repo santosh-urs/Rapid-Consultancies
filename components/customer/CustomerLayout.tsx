@@ -34,9 +34,10 @@ export function CustomerLayout({ children, title, subtitle }: CustomerLayoutProp
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     router.push('/login');
+    router.refresh();
   };
 
   const isActive = (href: string) => {

@@ -3666,7 +3666,7 @@ export default function AdminDashboardPage() {
           <Button
             variant="outline"
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border-[#E5E5E5] hover:bg-[#FEEAEA] hover:text-rose-600 hover:border-rose-300"
-            onClick={() => { window.sessionStorage.removeItem('admin-branch-confirmed'); logout(); router.push('/admin/login'); }}
+            onClick={async () => { window.sessionStorage.removeItem('admin-branch-confirmed'); await logout(); router.push('/admin/login'); router.refresh(); }}
           >
             <LogOut className="h-4 w-4" />
             Logout

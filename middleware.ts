@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifySessionToken, SESSION_COOKIE_NAME } from '@/lib/session';
 
-const protectedRoutes = ['/dashboard', '/profile', '/loans', '/loan-products'];
+const protectedRoutes = ['/dashboard', '/profile', '/loans', '/loan-products', '/repledge'];
 const adminRoutes = ['/admin'];
 const staffRoutes = ['/staff/dashboard'];
 
@@ -92,5 +92,7 @@ export const config = {
     '/staff/:path*',
     '/loan-products/:path*',
     '/loan-products',
+    '/repledge/:path*',
+    '/repledge',
   ],
 };

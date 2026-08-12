@@ -43,6 +43,21 @@ export function useAuth() {
     if (stored) setUser(stored);
   }, []);
 
+  // Belt-and-suspenders bfcache guard: `Cache-Control: no-store` on the
+  // gated pages (next.config.mjs) is the primary fix, but if a browser ever
+  // restores this page from the back/forward cache anyway (event.persisted),
+  // force a real reload so middleware re-checks the session instead of
+  // showing whatever was on screen right before logout.
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        window.location.reload();
+      }
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
+
   const login = async ({ identifier, password, role = 'user' }: LoginCredentials) => {
     if (!identifier || !password) {
       throw new Error('Invalid credentials');
