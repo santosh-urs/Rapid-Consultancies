@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback, Fragment } from 'react';
+import { useEffect, useState, useMemo, useCallback, Fragment, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
@@ -278,6 +278,22 @@ export default function AdminDashboardPage() {
   const switchActiveBranch = (branch: BranchCode) => {
     setActiveBranch(branch);
     if (typeof window !== 'undefined') window.localStorage.setItem('admin-active-branch', branch);
+  };
+
+  // Ask which branch to work in right after every fresh login. Tracked in
+  // sessionStorage (not localStorage) so it re-prompts on a new login but not
+  // on an in-session page refresh; cleared on logout below.
+  const [branchGateOpen, setBranchGateOpen] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!window.sessionStorage.getItem('admin-branch-confirmed')) {
+      setBranchGateOpen(true);
+    }
+  }, []);
+  const confirmBranchGate = (branch: BranchCode) => {
+    switchActiveBranch(branch);
+    if (typeof window !== 'undefined') window.sessionStorage.setItem('admin-branch-confirmed', '1');
+    setBranchGateOpen(false);
   };
 
   const customers = useMemo(() => allCustomers.filter(c => c.branch === activeBranch), [allCustomers, activeBranch]);
@@ -3455,7 +3471,41 @@ export default function AdminDashboardPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-surface text-text relative overflow-x-hidden">
+    <div
+      className="min-h-screen flex bg-surface text-text relative overflow-x-hidden"
+      style={{ '--brand-rgb': getBranch(activeBranch).accentRgb } as CSSProperties}
+    >
+      {/* Post-login branch gate — mandatory, no dismiss/skip */}
+      {branchGateOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-[#E5E5E5] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.35)] max-w-lg w-full overflow-hidden">
+            <div className="px-6 py-5 border-b border-[#E5E5E5] text-center">
+              <h3 className="text-lg font-bold text-text">Which branch are you working in?</h3>
+              <p className="mt-1 text-sm text-[#888888]">You can switch branches later from the sidebar.</p>
+            </div>
+            <div className="p-6 grid gap-4 sm:grid-cols-2">
+              {BRANCH_LIST.map(b => (
+                <button
+                  key={b.code}
+                  onClick={() => confirmBranchGate(b.code)}
+                  className="text-left rounded-2xl border-2 border-[#E5E5E5] hover:shadow-md p-5 transition-all hover:-translate-y-0.5"
+                  style={{ borderColor: `rgb(${b.accentRgb})` }}
+                >
+                  <div
+                    className="h-10 w-10 rounded-xl flex items-center justify-center text-white font-bold mb-3"
+                    style={{ backgroundColor: `rgb(${b.accentRgb})` }}
+                  >
+                    {b.name.charAt(0)}
+                  </div>
+                  <div className="font-bold text-text">{b.name}</div>
+                  <div className="mt-1 text-xs text-[#888888] leading-relaxed">{b.address}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 1. Sidebar Container */}
       <aside className={`w-64 bg-white border-r border-[#E5E5E5] flex flex-col justify-between shrink-0 h-screen sticky top-0 transition-transform duration-300 z-40
         fixed md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:relative'}
@@ -3616,7 +3666,7 @@ export default function AdminDashboardPage() {
           <Button
             variant="outline"
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border-[#E5E5E5] hover:bg-[#FEEAEA] hover:text-rose-600 hover:border-rose-300"
-            onClick={() => { logout(); router.push('/admin/login'); }}
+            onClick={() => { window.sessionStorage.removeItem('admin-branch-confirmed'); logout(); router.push('/admin/login'); }}
           >
             <LogOut className="h-4 w-4" />
             Logout
@@ -4235,18 +4285,22 @@ export default function AdminDashboardPage() {
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">Password</label>
                   <Input type="password" placeholder="Staff@123" value={staffFormPassword} onChange={e => setStaffFormPassword(e.target.value)} />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">Branch</label>
-                  <select
-                    value={staffFormBranch}
-                    onChange={e => setStaffFormBranch(e.target.value)}
-                    className="w-full rounded-2xl border border-[#E5E5E5] bg-white px-4 py-2.5 text-sm text-text focus:border-brand focus:ring-1 focus:ring-brand"
-                  >
-                    {BRANCH_LIST.map(b => (
-                      <option key={b.code} value={b.code}>{b.name}</option>
-                    ))}
-                  </select>
-                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">
+                  Assign to Branch <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={staffFormBranch}
+                  onChange={e => setStaffFormBranch(e.target.value)}
+                  className="w-full rounded-2xl border-2 border-brand/40 bg-brand/5 px-4 py-2.5 text-sm font-semibold text-text focus:border-brand focus:ring-1 focus:ring-brand"
+                >
+                  {BRANCH_LIST.map(b => (
+                    <option key={b.code} value={b.code}>{b.name}</option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-[11px] text-[#888888]">This staff member will only manage customers and loans for the selected branch.</p>
               </div>
               <div className="pt-4 border-t border-[#E5E5E5] flex justify-end gap-3">
                 <Button type="button" variant="outline" onClick={() => setIsAddStaffOpen(false)}>Cancel</Button>
@@ -4279,18 +4333,22 @@ export default function AdminDashboardPage() {
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">New Password</label>
                   <Input type="password" placeholder="Leave blank to keep current password" value={staffFormPassword} onChange={e => setStaffFormPassword(e.target.value)} />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">Branch</label>
-                  <select
-                    value={staffFormBranch}
-                    onChange={e => setStaffFormBranch(e.target.value)}
-                    className="w-full rounded-2xl border border-[#E5E5E5] bg-white px-4 py-2.5 text-sm text-text focus:border-brand focus:ring-1 focus:ring-brand"
-                  >
-                    {BRANCH_LIST.map(b => (
-                      <option key={b.code} value={b.code}>{b.name}</option>
-                    ))}
-                  </select>
-                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">
+                  Assign to Branch <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={staffFormBranch}
+                  onChange={e => setStaffFormBranch(e.target.value)}
+                  className="w-full rounded-2xl border-2 border-brand/40 bg-brand/5 px-4 py-2.5 text-sm font-semibold text-text focus:border-brand focus:ring-1 focus:ring-brand"
+                >
+                  {BRANCH_LIST.map(b => (
+                    <option key={b.code} value={b.code}>{b.name}</option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-[11px] text-[#888888]">This staff member will only manage customers and loans for the selected branch.</p>
               </div>
               <div className="pt-4 border-t border-[#E5E5E5] flex justify-end gap-3">
                 <Button type="button" variant="outline" onClick={() => setIsEditStaffOpen(false)}>Cancel</Button>

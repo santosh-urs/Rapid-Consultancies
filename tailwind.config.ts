@@ -9,7 +9,7 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          DEFAULT: '#CC0000',
+          DEFAULT: 'rgb(var(--brand-rgb, 204 0 0) / <alpha-value>)',
           light: '#F5F5F5',
           dark: '#A30000'
         },

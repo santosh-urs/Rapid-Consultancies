@@ -10,6 +10,9 @@ export interface BranchInfo {
   phone: string;
   email: string;
   hours: string;
+  /** "R G B" space-separated, matching the --brand-rgb CSS var the admin
+   *  dashboard swaps in per branch (see app/admin/dashboard/page.tsx). */
+  accentRgb: string;
 }
 
 export const BRANCHES: Record<BranchCode, BranchInfo> = {
@@ -20,6 +23,7 @@ export const BRANCHES: Record<BranchCode, BranchInfo> = {
     phone: '9502453969',
     email: 'rapidconsultancy124@gmail.com',
     hours: 'Mon–Sat, 9:00 AM – 6:00 PM',
+    accentRgb: '204 0 0', // #CC0000 — matches the site-wide default brand red
   },
   branch_2: {
     code: 'branch_2',
@@ -28,6 +32,7 @@ export const BRANCHES: Record<BranchCode, BranchInfo> = {
     phone: '8179790969',
     email: 'rapidconsultancy124@gmail.com',
     hours: 'Mon–Sat, 9:00 AM – 6:00 PM',
+    accentRgb: '30 79 180', // #1E4FB4 — distinct navy blue for Branch 2
   },
 };
 

@@ -9,6 +9,9 @@
   font-family: 'Inter', system-ui, sans-serif;
   background-color: #F5F5F5;
   color: #1A1A1A;
+  /* Default brand accent (Musthafa Nagar red). The admin dashboard overrides
+     this per-branch — see BRANCH_ACCENT_RGB in app/admin/dashboard/page.tsx. */
+  --brand-rgb: 204 0 0;
 }
 
 * {
