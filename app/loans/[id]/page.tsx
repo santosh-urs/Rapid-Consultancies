@@ -6,6 +6,7 @@ import { CustomerLayout } from '@/components/customer/CustomerLayout';
 import { useLoanDetail } from '@/hooks/useLoans';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { parseDateUTC } from '@/lib/loanUtils';
+import { getBranch } from '@/lib/branches';
 import { Button } from '@/components/ui/Button';
 import {
   ArrowLeft,
@@ -283,10 +284,10 @@ export default function LoanDetailPage() {
               <Landmark size={16} className="text-brand" />
               <span className="text-xs font-bold uppercase tracking-wider text-[#888888]">Branch</span>
             </div>
-            <div className="font-semibold text-text mb-3">{data.branch ?? 'Musthafa Nagar Branch'}</div>
+            <div className="font-semibold text-text mb-3">{getBranch(data.branch).name}</div>
             <div className="space-y-1.5 text-sm text-[#555555]">
-              <div className="flex items-center gap-2"><MapPin size={13} className="text-brand" /> Musthafa Nagar, Khammam</div>
-              <div className="flex items-center gap-2"><Phone size={13} className="text-brand" /> 9502453969</div>
+              <div className="flex items-center gap-2"><MapPin size={13} className="text-brand" /> {getBranch(data.branch).address}</div>
+              <div className="flex items-center gap-2"><Phone size={13} className="text-brand" /> {getBranch(data.branch).phone}</div>
             </div>
           </div>
         </div>

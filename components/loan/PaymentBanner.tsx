@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/Button';
+import { getBranch } from '@/lib/branches';
 
 interface PaymentUnavailableBannerProps {
   branch?: string;
@@ -10,12 +11,13 @@ interface PaymentUnavailableBannerProps {
 }
 
 export function PaymentUnavailableBanner({ branch, outstanding, interestDue, totalPayable }: PaymentUnavailableBannerProps) {
+  const branchInfo = getBranch(branch);
   return (
     <div className="rounded-3xl border border-[#E5E5E5] bg-[#FFF4E5] p-6">
       <div className="flex flex-col gap-3">
         <div className="text-sm font-semibold uppercase tracking-[0.16em] text-[#A65E00]">Payment Notice</div>
         <div className="text-lg font-semibold text-text">Branch payment is currently unavailable</div>
-        <p className="text-sm text-[#555555]">For security reasons, payments are processed at your assigned branch: {branch ?? 'Musthafa Nagar Branch'}.</p>
+        <p className="text-sm text-[#555555]">For security reasons, payments are processed at your assigned branch: {branchInfo.name}.</p>
         <div className="grid gap-3 rounded-3xl bg-white p-4 text-sm text-[#555555] shadow-sm md:grid-cols-3">
           <div>
             <div className="text-xs uppercase tracking-[0.16em] text-[#888888]">Balance due</div>

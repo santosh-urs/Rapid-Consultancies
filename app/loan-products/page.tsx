@@ -5,6 +5,7 @@ import { CustomerLayout } from '@/components/customer/CustomerLayout';
 import { Phone, MapPin, CheckCircle2, X, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { BRANCH_LIST } from '@/lib/branches';
 
 const loanProducts = [
   {
@@ -112,9 +113,14 @@ export default function LoanProductsPage() {
           <div>
             <div className="text-lg font-bold text-text">Rapid Consultancy</div>
             <div className="text-sm text-[#555555] mt-0.5">Wide range of loan products with <strong>low interest rates</strong> and quick processing.</div>
-            <div className="flex flex-wrap gap-4 mt-3 text-sm">
-              <span className="flex items-center gap-1.5 text-brand font-semibold"><Phone size={14} /> 9502453969</span>
-              <span className="flex items-center gap-1.5 text-[#555555]"><MapPin size={14} /> Musthafa Nagar, Khammam</span>
+            <div className="flex flex-wrap gap-x-6 gap-y-2 mt-3 text-sm">
+              {BRANCH_LIST.map(b => (
+                <span key={b.code} className="flex flex-wrap items-center gap-1.5">
+                  <span className="font-semibold text-text">{b.name}:</span>
+                  <span className="flex items-center gap-1 text-brand font-semibold"><Phone size={14} /> {b.phone}</span>
+                  <span className="flex items-center gap-1 text-[#555555]"><MapPin size={14} /> {b.address}</span>
+                </span>
+              ))}
             </div>
           </div>
         </div>
@@ -169,8 +175,13 @@ export default function LoanProductsPage() {
         <div className="text-base font-bold text-text mb-1">Interested? Visit or call us</div>
         <div className="text-sm text-[#555555] mb-4">Our team will guide you through the best loan option for your needs.</div>
         <div className="flex flex-wrap justify-center gap-6 text-sm">
-          <a href="tel:9502453969" className="flex items-center gap-2 font-semibold text-brand hover:underline"><Phone size={16} /> 9502453969</a>
-          <span className="flex items-center gap-2 text-[#555555]"><MapPin size={16} /> Musthafa Nagar, Khammam</span>
+          {BRANCH_LIST.map(b => (
+            <span key={b.code} className="flex flex-wrap items-center justify-center gap-2">
+              <span className="font-semibold text-text">{b.name}:</span>
+              <a href={`tel:${b.phone}`} className="flex items-center gap-1 font-semibold text-brand hover:underline"><Phone size={16} /> {b.phone}</a>
+              <span className="flex items-center gap-1 text-[#555555]"><MapPin size={16} /> {b.address}</span>
+            </span>
+          ))}
         </div>
       </div>
 
@@ -196,23 +207,25 @@ export default function LoanProductsPage() {
               </div>
               
               {/* Branch Details */}
-              <div className="w-full text-left bg-neutral-50 border border-[#F0F0F0] rounded-xl p-4 mb-6 space-y-2.5">
+              <div className="w-full text-left bg-neutral-50 border border-[#F0F0F0] rounded-xl p-4 mb-6 space-y-3">
                 <div className="text-xs font-bold text-text border-b border-[#E8E8E8] pb-1.5 uppercase tracking-wider">
                   Branch Information
                 </div>
-                <div className="flex items-start gap-2 text-xs text-text">
-                  <MapPin size={14} className="text-brand shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-semibold">Musthafa Nagar Branch</div>
-                    <div className="text-[#666]">Musthafa Nagar, Khammam</div>
+                {BRANCH_LIST.map(b => (
+                  <div key={b.code} className="space-y-2 pb-2 last:pb-0 border-b last:border-0 border-[#F0F0F0]">
+                    <div className="flex items-start gap-2 text-xs text-text">
+                      <MapPin size={14} className="text-brand shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold">{b.name}</div>
+                        <div className="text-[#666]">{b.address}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-text">
+                      <Phone size={14} className="text-brand shrink-0" />
+                      <span className="font-semibold">{b.phone}</span>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-text">
-                  <Phone size={14} className="text-brand shrink-0" />
-                  <div>
-                    <span className="font-semibold">9502453969</span>
-                  </div>
-                </div>
+                ))}
                 <div className="flex items-start gap-2 text-xs text-text">
                   <AlertCircle size={14} className="text-brand shrink-0 mt-0.5" />
                   <div>

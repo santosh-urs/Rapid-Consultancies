@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { useToast } from '@/components/ui/Toast';
 import { supabase } from '@/lib/supabase';
 import { validateImageUpload } from '@/lib/fileUpload';
+import { BRANCH_LIST, DEFAULT_BRANCH, getBranch, type BranchCode } from '@/lib/branches';
 import {
   calculateDynamicInterest,
   getTotalInterestDue,
@@ -219,11 +220,58 @@ export default function StaffDashboardPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loans, setLoans] = useState<Loan[]>([]);
-  const [sanctionRequests, setSanctionRequests] = useState<SanctionRequest[]>([]);
-  const [closeRequests, setCloseRequests] = useState<any[]>([]);
-  const [outstandingEditRequests, setOutstandingEditRequests] = useState<any[]>([]);
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
+  const [allLoans, setAllLoans] = useState<Loan[]>([]);
+  const [allSanctionRequests, setAllSanctionRequests] = useState<SanctionRequest[]>([]);
+  const [allCloseRequests, setAllCloseRequests] = useState<any[]>([]);
+  const [allOutstandingEditRequests, setAllOutstandingEditRequests] = useState<any[]>([]);
+
+  // Branch the staff member is currently working in. Defaults to their
+  // assigned home branch, but they can switch (persisted per-staff so it
+  // survives a refresh without affecting other staff sharing the browser).
+  const [activeBranch, setActiveBranch] = useState<BranchCode>(DEFAULT_BRANCH);
+  useEffect(() => {
+    if (!user) return;
+    const stored = typeof window !== 'undefined' ? window.localStorage.getItem(`staff-active-branch-${user.id}`) : null;
+    setActiveBranch((stored as BranchCode) || (user.branch as BranchCode) || DEFAULT_BRANCH);
+  }, [user]);
+  const switchActiveBranch = (branch: BranchCode) => {
+    setActiveBranch(branch);
+    if (user && typeof window !== 'undefined') {
+      window.localStorage.setItem(`staff-active-branch-${user.id}`, branch);
+    }
+  };
+
+  const customers = useMemo(
+    () => allCustomers.filter(c => c.branch === activeBranch),
+    [allCustomers, activeBranch]
+  );
+  const loans = useMemo(
+    () => allLoans.filter(l => l.branch === activeBranch),
+    [allLoans, activeBranch]
+  );
+  const sanctionRequests = useMemo(
+    () => allSanctionRequests.filter(r => r.branch === activeBranch),
+    [allSanctionRequests, activeBranch]
+  );
+  const branchByLoanOrCustomer = useMemo(() => {
+    const map = new Map<string, string>();
+    allLoans.forEach(l => map.set(`loan:${l.id}`, l.branch));
+    allCustomers.forEach(c => map.set(`cust:${c.id}`, c.branch));
+    return map;
+  }, [allLoans, allCustomers]);
+  const requestBranch = (req: { loanDbId?: string; customerId?: string }) =>
+    (req.loanDbId && branchByLoanOrCustomer.get(`loan:${req.loanDbId}`)) ||
+    (req.customerId && branchByLoanOrCustomer.get(`cust:${req.customerId}`)) ||
+    DEFAULT_BRANCH;
+  const closeRequests = useMemo(
+    () => allCloseRequests.filter(r => requestBranch(r) === activeBranch),
+    [allCloseRequests, branchByLoanOrCustomer, activeBranch]
+  );
+  const outstandingEditRequests = useMemo(
+    () => allOutstandingEditRequests.filter(r => requestBranch(r) === activeBranch),
+    [allOutstandingEditRequests, branchByLoanOrCustomer, activeBranch]
+  );
 
   // Outstanding Edit modal state
   const [isOutstandingEditOpen, setIsOutstandingEditOpen] = useState(false);
@@ -355,7 +403,7 @@ export default function StaffDashboardPage() {
         }
 
         const filteredCusts = (custRes.data || []).filter((c: any) => !(c.password?.startsWith('DELETED_') ?? false));
-        setCustomers(filteredCusts.map((c: any) => ({
+        setAllCustomers(filteredCusts.map((c: any) => ({
           id: c.id,
           name: c.name,
           mobile: c.mobile,
@@ -368,7 +416,7 @@ export default function StaffDashboardPage() {
           password: c.password || '',
         })).sort((a: any, b: any) => parseDateUTC(b.joinedDate).getTime() - parseDateUTC(a.joinedDate).getTime()));
 
-        setLoans((loanRes.data || []).map((l: any) => {
+        setAllLoans((loanRes.data || []).map((l: any) => {
           const goldWeight = Number(l.gold_weight);
           const loanType = l.loan_type || (goldWeight > 0 ? 'Gold Loan' : 'Loan');
           const tenureMonths = l.tenure_months ? Number(l.tenure_months) : (() => {
@@ -403,7 +451,7 @@ export default function StaffDashboardPage() {
         }));
 
         if (!sanctionRes.error) {
-          setSanctionRequests((sanctionRes.data || []).map((s: any) => {
+          setAllSanctionRequests((sanctionRes.data || []).map((s: any) => {
             const meta = parseSanctionMeta(s.notes || '');
             return {
               id: s.id,
@@ -437,7 +485,7 @@ export default function StaffDashboardPage() {
         }
 
         if (!closeRes?.error && closeRes?.data) {
-          setCloseRequests(closeRes.data.map((r: any) => ({
+          setAllCloseRequests(closeRes.data.map((r: any) => ({
             id: r.id,
             loanId: r.loan_id,
             loanDbId: r.loan_db_id,
@@ -454,7 +502,7 @@ export default function StaffDashboardPage() {
         }
 
         if (!outstandingEditRes?.error && outstandingEditRes?.data) {
-          setOutstandingEditRequests(outstandingEditRes.data.map((r: any) => ({
+          setAllOutstandingEditRequests(outstandingEditRes.data.map((r: any) => ({
             id: r.id,
             loanId: r.loan_id,
             loanDbId: r.loan_db_id,
@@ -517,12 +565,12 @@ export default function StaffDashboardPage() {
     }
 
     const normNew = normalizeMobile(addCustFormMobile);
-    const mobileExists = customers.some(c => normalizeMobile(c.mobile) === normNew);
+    const mobileExists = allCustomers.some(c => normalizeMobile(c.mobile) === normNew);
     if (mobileExists) {
       toast.push('A customer with this mobile number already exists.');
       return;
     }
-    const emailExists = customers.some(c => c.email.toLowerCase() === addCustFormEmail.toLowerCase().trim());
+    const emailExists = allCustomers.some(c => c.email.toLowerCase() === addCustFormEmail.toLowerCase().trim());
     if (emailExists) {
       toast.push('A customer with this email address already exists.');
       return;
@@ -538,7 +586,7 @@ export default function StaffDashboardPage() {
       address: addCustFormAddress.trim(),
       dob: addCustFormDob,
       kycStatus: 'Pending',
-      branch: user?.branch || 'Musthafa Nagar Branch',
+      branch: activeBranch,
       joinedDate: getLocalISODate(),
     };
 
@@ -559,7 +607,7 @@ export default function StaffDashboardPage() {
         if (error) throw error;
       }
 
-      setCustomers(prev => [{ ...newCust }, ...prev]);
+      setAllCustomers(prev => [{ ...newCust }, ...prev]);
       await addAuditLog('Customer Added (Staff)', `Staff ${user?.name} added customer ${newCust.name} (${newCust.mobile})`);
       toast.push(`Customer ${newCust.name} successfully added.`);
       setIsAddCustomerOpen(false);
@@ -605,7 +653,7 @@ export default function StaffDashboardPage() {
         if (error) throw error;
       }
 
-      setCustomers(prev => prev.map(c =>
+      setAllCustomers(prev => prev.map(c =>
         c.id === selectedCustomer.id
           ? { ...c, name: custFormName.trim(), mobile: custFormMobile.trim(), email: custFormEmail.trim(), dob: custFormDob, address: custFormAddress.trim(), branch: custFormBranch.trim(), kycStatus: custFormKyc }
           : c
@@ -729,7 +777,7 @@ export default function StaffDashboardPage() {
         if (payError) throw payError;
       }
 
-      setLoans(prev => prev.map(l =>
+      setAllLoans(prev => prev.map(l =>
         l.id === loan.id
           ? { ...l, outstanding: newOutstanding, nextDueDate: newNextDue, status: newStatus as Loan['status'] }
           : l
@@ -794,7 +842,7 @@ export default function StaffDashboardPage() {
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
       const { error: dbErr } = await supabase.from('loans').update({ gold_image_url: publicUrl }).eq('id', loan.id);
       if (dbErr) throw dbErr;
-      setLoans(prev => prev.map(l => l.id === loan.id ? { ...l, goldImageUrl: publicUrl } : l));
+      setAllLoans(prev => prev.map(l => l.id === loan.id ? { ...l, goldImageUrl: publicUrl } : l));
       setSelectedLoan(prev => prev?.id === loan.id ? { ...prev, goldImageUrl: publicUrl } : prev);
       await addAuditLog('Gold Photo Uploaded', `Staff ${user?.name} uploaded gold photo for loan ${loan.loanId}`);
       toast.push('Gold photo uploaded successfully.');
@@ -839,7 +887,7 @@ export default function StaffDashboardPage() {
     }
 
     setIsLoading(true);
-    const branch = user?.branch || 'Musthafa Nagar Branch';
+    const branch = activeBranch;
     const encodedNotes = encodeSanctionNotes(
       sanctionLoanType, sanctionDueDate,
       sanctionCustMobile, sanctionCustEmail, sanctionCustDob, sanctionCustAddress,
@@ -903,7 +951,7 @@ export default function StaffDashboardPage() {
         if (error) throw error;
       }
 
-      setSanctionRequests(prev => [newRequest, ...prev]);
+      setAllSanctionRequests(prev => [newRequest, ...prev]);
       await addAuditLog('Loan Sanction Requested', `Staff ${user?.name} submitted sanction request for ${newRequest.customerName} (${newRequest.customerMobile}) — ₹${sanctionPrincipal.toLocaleString('en-IN')} (${sanctionLoanType})${custId ? ' [Existing Customer]' : ''}`);
       toast.push('Sanction request submitted. Awaiting admin approval.');
       // Reset form
@@ -1148,7 +1196,7 @@ export default function StaffDashboardPage() {
                     <div className="text-xs text-[#888888]">{c.email}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">{statusBadge(c.kycStatus)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-text">{c.branch}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-text">{getBranch(c.branch).name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-[#888888]">{c.joinedDate}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <Button variant="ghost" className="text-xs py-1 px-3 gap-1" onClick={() => handleEditCustomerClick(c)}>
@@ -1929,7 +1977,16 @@ export default function StaffDashboardPage() {
           {user && (
             <div className="mt-3 rounded-2xl bg-surface px-3 py-2">
               <div className="text-sm font-semibold text-text">{user.name}</div>
-              <div className="text-xs text-[#888888]">{user.branch ?? 'Branch Staff'}</div>
+              <label className="mt-1.5 block text-[10px] font-bold uppercase tracking-wider text-[#888888]">Working Branch</label>
+              <select
+                value={activeBranch}
+                onChange={e => switchActiveBranch(e.target.value as BranchCode)}
+                className="mt-1 w-full rounded-lg border border-[#E5E5E5] bg-white px-2 py-1.5 text-xs font-semibold text-text focus:border-brand focus:ring-1 focus:ring-brand"
+              >
+                {BRANCH_LIST.map(b => (
+                  <option key={b.code} value={b.code}>{b.name}</option>
+                ))}
+              </select>
             </div>
           )}
         </div>
@@ -2090,7 +2147,15 @@ export default function StaffDashboardPage() {
                   </div>
                   <div className="col-span-2 sm:col-span-1">
                     <label className="mb-1.5 block text-sm font-medium text-text">Branch</label>
-                    <Input value={custFormBranch} onChange={e => setCustFormBranch(e.target.value)} placeholder="Branch name" />
+                    <select
+                      value={custFormBranch}
+                      onChange={e => setCustFormBranch(e.target.value)}
+                      className="w-full rounded-2xl border border-[#E5E5E5] bg-white px-4 py-2.5 text-sm text-text focus:border-brand focus:ring-1 focus:ring-brand"
+                    >
+                      {BRANCH_LIST.map(b => (
+                        <option key={b.code} value={b.code}>{b.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="col-span-2 sm:col-span-1">
                     <label className="mb-1.5 block text-sm font-medium text-text">KYC Status</label>

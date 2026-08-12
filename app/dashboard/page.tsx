@@ -12,6 +12,7 @@ import {
   addMonthsUTC,
   formatISODateOnly,
 } from '@/lib/loanUtils';
+import { getBranch } from '@/lib/branches';
 import {
   Coins,
   TrendingDown,
@@ -356,12 +357,12 @@ export default function DashboardPage() {
           <Landmark size={18} className="text-brand" />
           <span className="text-xs font-bold uppercase tracking-wider text-[#888888]">Branch Details</span>
         </div>
-        <div className="text-lg font-bold text-text mb-1">{data?.branch ?? 'Musthafa Nagar Branch'}</div>
+        <div className="text-lg font-bold text-text mb-1">{getBranch(data?.branch).name}</div>
         <p className="text-sm text-[#555555] mb-4">Visit us for document verification, renewal, or customer support.</p>
         <div className="space-y-2 text-sm text-[#555555]">
-          <div className="flex items-center gap-2"><MapPin size={14} className="text-brand shrink-0" /> Musthafa Nagar, Khammam</div>
-          <div className="flex items-center gap-2"><Phone size={14} className="text-brand shrink-0" /> 9502453969</div>
-          <div className="flex items-center gap-2"><Clock size={14} className="text-brand shrink-0" /> Mon–Sat, 9:00 AM – 6:00 PM</div>
+          <div className="flex items-center gap-2"><MapPin size={14} className="text-brand shrink-0" /> {getBranch(data?.branch).address}</div>
+          <div className="flex items-center gap-2"><Phone size={14} className="text-brand shrink-0" /> {getBranch(data?.branch).phone}</div>
+          <div className="flex items-center gap-2"><Clock size={14} className="text-brand shrink-0" /> {getBranch(data?.branch).hours}</div>
         </div>
       </div>
     </CustomerLayout>

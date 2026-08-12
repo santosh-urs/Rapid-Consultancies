@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/Toast';
 import { supabase } from '@/lib/supabase';
 import { calculateDynamicInterest, getTotalInterestDue, generatePaymentSchedule, addMonthsUTC, addDaysUTC, getTodayUTC, formatISODateOnly, inferTenureMonths, advanceNextDueDateFully, type MonthAdjustment, type ScheduleRow } from '@/lib/loanUtils';
 import { validateImageUpload } from '@/lib/fileUpload';
+import { BRANCH_LIST, DEFAULT_BRANCH, getBranch, type BranchCode } from '@/lib/branches';
 import {
   LayoutDashboard,
   Users,
@@ -248,25 +249,67 @@ export default function AdminDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   // Database States
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
   const [showDeletedCustomers, setShowDeletedCustomers] = useState(false);
-  const [loans, setLoans] = useState<Loan[]>([]);
+  const [allLoans, setAllLoans] = useState<Loan[]>([]);
   // Per-month interest charges (loan_interest_adjustments), grouped by loan id.
   const [monthAdjustmentsByLoan, setMonthAdjustmentsByLoan] = useState<Record<string, LoanInterestAdjustmentRow[]>>({});
-  const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
+  const [allAccessRequests, setAllAccessRequests] = useState<AccessRequest[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [staffList, setStaffList] = useState<Staff[]>([]);
-  const [sanctionRequests, setSanctionRequests] = useState<SanctionRequest[]>([]);
-  const [repledgeRequests, setRepledgeRequests] = useState<RepledgeRequest[]>([]);
-  const [closeRequests, setCloseRequests] = useState<any[]>([]);
+  const [allStaffList, setAllStaffList] = useState<Staff[]>([]);
+  const [allSanctionRequests, setAllSanctionRequests] = useState<SanctionRequest[]>([]);
+  const [allRepledgeRequests, setAllRepledgeRequests] = useState<RepledgeRequest[]>([]);
+  const [allCloseRequests, setAllCloseRequests] = useState<any[]>([]);
   const [selectedCloseReq, setSelectedCloseReq] = useState<any | null>(null);
   const [isCloseReviewOpen, setIsCloseReviewOpen] = useState(false);
   const [closeAdminNotes, setCloseAdminNotes] = useState('');
 
-  const [outstandingEditRequests, setOutstandingEditRequests] = useState<any[]>([]);
+  const [allOutstandingEditRequests, setAllOutstandingEditRequests] = useState<any[]>([]);
   const [selectedOutstandingEditReq, setSelectedOutstandingEditReq] = useState<any | null>(null);
   const [isOutstandingEditReviewOpen, setIsOutstandingEditReviewOpen] = useState(false);
   const [outstandingEditAdminNotes, setOutstandingEditAdminNotes] = useState('');
+
+  // Branch the admin is currently viewing/managing. Both branches share the
+  // one admin login, so this is a browser-local preference, not per-user.
+  const [activeBranch, setActiveBranch] = useState<BranchCode>(() => {
+    if (typeof window === 'undefined') return DEFAULT_BRANCH;
+    return (window.localStorage.getItem('admin-active-branch') as BranchCode) || DEFAULT_BRANCH;
+  });
+  const switchActiveBranch = (branch: BranchCode) => {
+    setActiveBranch(branch);
+    if (typeof window !== 'undefined') window.localStorage.setItem('admin-active-branch', branch);
+  };
+
+  const customers = useMemo(() => allCustomers.filter(c => c.branch === activeBranch), [allCustomers, activeBranch]);
+  const loans = useMemo(() => allLoans.filter(l => l.branch === activeBranch), [allLoans, activeBranch]);
+  const accessRequests = useMemo(() => allAccessRequests.filter(r => r.branch === activeBranch), [allAccessRequests, activeBranch]);
+  const staffList = useMemo(() => allStaffList.filter(s => s.branch === activeBranch), [allStaffList, activeBranch]);
+  const sanctionRequests = useMemo(() => allSanctionRequests.filter(r => r.branch === activeBranch), [allSanctionRequests, activeBranch]);
+
+  // loan_close_requests / outstanding_edit_requests / repledge_requests have no
+  // branch column of their own — resolve via the related loan/customer instead.
+  const branchByLoanOrCustomer = useMemo(() => {
+    const map = new Map<string, string>();
+    allLoans.forEach(l => map.set(`loan:${l.id}`, l.branch));
+    allCustomers.forEach(c => map.set(`cust:${c.id}`, c.branch));
+    return map;
+  }, [allLoans, allCustomers]);
+  const requestBranch = (req: { loanDbId?: string; customerId?: string }) =>
+    (req.loanDbId && branchByLoanOrCustomer.get(`loan:${req.loanDbId}`)) ||
+    (req.customerId && branchByLoanOrCustomer.get(`cust:${req.customerId}`)) ||
+    DEFAULT_BRANCH;
+  const closeRequests = useMemo(
+    () => allCloseRequests.filter(r => requestBranch(r) === activeBranch),
+    [allCloseRequests, branchByLoanOrCustomer, activeBranch]
+  );
+  const outstandingEditRequests = useMemo(
+    () => allOutstandingEditRequests.filter(r => requestBranch(r) === activeBranch),
+    [allOutstandingEditRequests, branchByLoanOrCustomer, activeBranch]
+  );
+  const repledgeRequests = useMemo(
+    () => allRepledgeRequests.filter(r => requestBranch(r) === activeBranch),
+    [allRepledgeRequests, branchByLoanOrCustomer, activeBranch]
+  );
 
 
   // Staff form state
@@ -277,7 +320,7 @@ export default function AdminDashboardPage() {
   const [staffFormMobile, setStaffFormMobile] = useState('');
   const [staffFormEmail, setStaffFormEmail] = useState('');
   const [staffFormPassword, setStaffFormPassword] = useState('Staff@123');
-  const [staffFormBranch, setStaffFormBranch] = useState('Musthafa Nagar Branch');
+  const [staffFormBranch, setStaffFormBranch] = useState<string>(DEFAULT_BRANCH);
 
   // Sanction review state
   const [isSanctionReviewOpen, setIsSanctionReviewOpen] = useState(false);
@@ -317,7 +360,7 @@ export default function AdminDashboardPage() {
   const [custFormAddress, setCustFormAddress] = useState('');
   const [custFormDob, setCustFormDob] = useState('');
   const [custFormKyc, setCustFormKyc] = useState<'Verified' | 'Pending' | 'Rejected'>('Verified');
-  const [custFormBranch, setCustFormBranch] = useState('Musthafa Nagar Branch');
+  const [custFormBranch, setCustFormBranch] = useState<string>(DEFAULT_BRANCH);
   const [custFormPassword, setCustFormPassword] = useState('Cust@123');
   const [custFormJoinedDate, setCustFormJoinedDate] = useState('');
   const [custFormProcessingFee, setCustFormProcessingFee] = useState(0);
@@ -366,6 +409,7 @@ export default function AdminDashboardPage() {
   const [isAddingCharge, setIsAddingCharge] = useState(false);
 
   const generateCustomerPdf = async (customer: Customer, loan: Loan | null) => {
+    const branchInfo = getBranch(customer.branch);
     // Use customer-level processing fee (editable by admin); fall back to sanction request lookup
     const matchedSanction = loan
       ? sanctionRequests.find(
@@ -448,7 +492,8 @@ export default function AdminDashboardPage() {
 <body>
   <div class="header">
     <h1>RAPID CONSULTANCY</h1>
-    <p>rapidconsultancy124@gmail.com &nbsp;|&nbsp; +91 7670870964</p>
+    <p>${branchInfo.name} &nbsp;|&nbsp; ${branchInfo.address}</p>
+    <p>${branchInfo.email} &nbsp;|&nbsp; ${branchInfo.phone}</p>
     <hr/>
     <span class="subtitle">Customer Statement</span>
   </div>
@@ -462,14 +507,14 @@ export default function AdminDashboardPage() {
       ${row('Mobile', customer.mobile)}
       ${row('Email', customer.email)}
       ${row('Address', customer.address || 'N/A')}
-      ${row('Branch', customer.branch)}
+      ${row('Branch', branchInfo.name)}
       ${row('KYC Status', customer.kycStatus)}
       ${row('Joined Date', customer.joinedDate || 'N/A')}
       ${processingFee > 0 ? row('Processing Fee', `Rs. ${processingFee.toLocaleString('en-IN')}`) : ''}
     </table>
     ${loanSection}
     <div class="footer">
-      Generated on ${new Date().toLocaleString('en-IN')} &nbsp;|&nbsp; Rapid Consultancy &nbsp;|&nbsp; rapidconsultancy124@gmail.com
+      Generated on ${new Date().toLocaleString('en-IN')} &nbsp;|&nbsp; ${branchInfo.name} &nbsp;|&nbsp; ${branchInfo.email}
     </div>
   </div>
 </body>
@@ -574,14 +619,14 @@ export default function AdminDashboardPage() {
       }
       setMonthAdjustmentsByLoan(monthAdjByLoan);
 
-      setCustomers((custRes.data || []).map((c: any) => ({
+      setAllCustomers((custRes.data || []).map((c: any) => ({
         id: c.id, name: c.name, mobile: c.mobile, email: c.email,
         address: c.address || '', dob: c.dob || '', kycStatus: c.kyc_status,
         branch: c.branch, joinedDate: c.joined_date, password: c.password || '',
         avatarUrl: c.avatar_url || '', processingFee: Number(c.processing_fee ?? 0),
       })).sort((a: any, b: any) => new Date(b.joinedDate).getTime() - new Date(a.joinedDate).getTime()));
 
-      setLoans((loanRes.data || []).map((l: any) => {
+      setAllLoans((loanRes.data || []).map((l: any) => {
         const goldWeight = Number(l.gold_weight);
         const loanType = l.loan_type || (goldWeight > 0 ? 'Gold Loan' : 'Loan');
         let tenureMonths = l.tenure_months ? Number(l.tenure_months) : 0;
@@ -612,7 +657,7 @@ export default function AdminDashboardPage() {
         };
       }));
 
-      setAccessRequests((reqRes.data || []).map((r: any) => {
+      setAllAccessRequests((reqRes.data || []).map((r: any) => {
         let userId = '';
         let actualPasswordHash = r.password_hash || '';
         let loanType = '';
@@ -643,14 +688,14 @@ export default function AdminDashboardPage() {
       })).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
 
       if (!staffRes.error && staffRes.data) {
-        setStaffList(staffRes.data.map((s: any) => ({
+        setAllStaffList(staffRes.data.map((s: any) => ({
           id: s.id, name: s.name, mobile: s.mobile, email: s.email,
           password: s.password, branch: s.branch, isActive: s.is_active, createdDate: s.created_date,
         })));
       }
 
       if (!sanctRes.error && sanctRes.data) {
-        setSanctionRequests(sanctRes.data.map((s: any) => {
+        setAllSanctionRequests(sanctRes.data.map((s: any) => {
           const meta = parseSanctionMeta(s.notes || '');
           return {
             id: s.id, staffId: s.staff_id || '', staffName: s.staff_name,
@@ -677,7 +722,7 @@ export default function AdminDashboardPage() {
 
 
       if (!closeRes?.error && closeRes?.data) {
-        setCloseRequests(closeRes.data.map((r: any) => ({
+        setAllCloseRequests(closeRes.data.map((r: any) => ({
           id: r.id,
           loanId: r.loan_id,
           loanDbId: r.loan_db_id,
@@ -694,7 +739,7 @@ export default function AdminDashboardPage() {
       }
 
       if (!outstandingEditRes?.error && outstandingEditRes?.data) {
-        setOutstandingEditRequests(outstandingEditRes.data.map((r: any) => ({
+        setAllOutstandingEditRequests(outstandingEditRes.data.map((r: any) => ({
           id: r.id,
           loanId: r.loan_id,
           loanDbId: r.loan_db_id,
@@ -877,11 +922,11 @@ export default function AdminDashboardPage() {
 
     const normNew = normalizeMobile(custFormMobile);
     const isDeleted = (c: Customer) => c.password?.startsWith('DELETED_') ?? false;
-    if (customers.some(c => !isDeleted(c) && normalizeMobile(c.mobile) === normNew)) {
+    if (allCustomers.some(c => !isDeleted(c) && normalizeMobile(c.mobile) === normNew)) {
       toast.push('A customer with this mobile number already exists.');
       return;
     }
-    if (customers.some(c => !isDeleted(c) && c.email.toLowerCase() === custFormEmail.toLowerCase().trim())) {
+    if (allCustomers.some(c => !isDeleted(c) && c.email.toLowerCase() === custFormEmail.toLowerCase().trim())) {
       toast.push('A customer with this email address already exists.');
       return;
     }
@@ -918,7 +963,7 @@ export default function AdminDashboardPage() {
       }
 
       const updated = [newCust, ...customers];
-      setCustomers(updated);
+      setAllCustomers(updated);
 
       await addAuditLog('Customer Added', `Added customer ${newCust.name} (${newCust.mobile})`);
       toast.push(`Customer ${newCust.name} successfully added.`);
@@ -1011,9 +1056,9 @@ export default function AdminDashboardPage() {
         }
         return c;
       });
-      setCustomers(updated);
+      setAllCustomers(updated);
 
-      setLoans(prev => prev.map(l => {
+      setAllLoans(prev => prev.map(l => {
         if (l.customerId !== selectedCustomer.id || (l.status !== 'active' && l.status !== 'overdue')) return l;
         const calculatedPortion = l.interestDue - (l.interestAdjustment ?? 0);
         return {
@@ -1086,13 +1131,13 @@ export default function AdminDashboardPage() {
         }
         return item;
       });
-      setCustomers(updatedCustomers);
+      setAllCustomers(updatedCustomers);
 
       // Clean up local states of deleted data
-      setLoans(prev => prev.filter(l => l.customerId !== c.id));
-      setSanctionRequests(prev => prev.filter(r => r.customerId !== c.id));
-      setCloseRequests(prev => prev.filter(r => r.customerId !== c.id));
-      setAccessRequests(prev => prev.filter(r => r.mobile !== c.mobile && r.email !== c.email));
+      setAllLoans(prev => prev.filter(l => l.customerId !== c.id));
+      setAllSanctionRequests(prev => prev.filter(r => r.customerId !== c.id));
+      setAllCloseRequests(prev => prev.filter(r => r.customerId !== c.id));
+      setAllAccessRequests(prev => prev.filter(r => r.mobile !== c.mobile && r.email !== c.email));
 
       await addAuditLog('Customer Deleted', `Deleted customer ${c.name} and purged all associated database records`);
       toast.push(`Customer "${c.name}" deleted and associated database records purged.`);
@@ -1149,7 +1194,7 @@ export default function AdminDashboardPage() {
       goldWeight: loanFormLoanType === 'Weekly Loan' ? 0 : loanFormGoldWeight,
       goldPurity: loanFormLoanType === 'Weekly Loan' ? 0 : loanFormGoldPurity,
       estimatedGoldValue: loanFormLoanType === 'Weekly Loan' ? 0 : loanFormEstimatedGoldValue,
-      branch: cust.branch || 'Musthafa Nagar Branch',
+      branch: cust.branch || DEFAULT_BRANCH,
       loanType: loanFormLoanType || 'Gold Loan',
       tenureMonths: Number(loanFormTenure) || 6,
     };
@@ -1188,7 +1233,7 @@ export default function AdminDashboardPage() {
       }
 
       const updated = [newLoan, ...loans];
-      setLoans(updated);
+      setAllLoans(updated);
 
       await addAuditLog('Loan Issued', `Issued ${loanFormLoanType} ${newLoan.loanId} to ${cust.name} for ₹${newLoan.principal.toLocaleString('en-IN')}. Due: ${nextDueDateStr}`);
       toast.push(`Loan ${newLoan.loanId} successfully issued.`);
@@ -1216,7 +1261,7 @@ export default function AdminDashboardPage() {
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
       const { error: dbErr } = await supabase.from('loans').update({ gold_image_url: publicUrl }).eq('id', loan.id);
       if (dbErr) throw dbErr;
-      setLoans(prev => prev.map(l => l.id === loan.id ? { ...l, goldImageUrl: publicUrl } : l));
+      setAllLoans(prev => prev.map(l => l.id === loan.id ? { ...l, goldImageUrl: publicUrl } : l));
       setSelectedLoan(prev => prev?.id === loan.id ? { ...prev, goldImageUrl: publicUrl } : prev);
       await addAuditLog('Gold Photo Uploaded', `Admin uploaded gold photo for loan ${loan.loanId}`);
       toast.push(`Gold photo uploaded for loan ${loan.loanId}.`);
@@ -1284,7 +1329,7 @@ export default function AdminDashboardPage() {
         ...prev,
         [selectedLoan.id]: [...(prev[selectedLoan.id] || []), newEntry],
       }));
-      setLoans(prev => prev.map(l => l.id === selectedLoan.id ? { ...l, interestDue: l.interestDue + chargeAmount } : l));
+      setAllLoans(prev => prev.map(l => l.id === selectedLoan.id ? { ...l, interestDue: l.interestDue + chargeAmount } : l));
       setSelectedLoan(prev => (prev && prev.id === selectedLoan.id) ? { ...prev, interestDue: prev.interestDue + chargeAmount } : prev);
 
       await addAuditLog(
@@ -1390,7 +1435,7 @@ export default function AdminDashboardPage() {
         }
         return l;
       });
-      setLoans(updated);
+      setAllLoans(updated);
 
       await addAuditLog('Loan Adjusted', `Adjusted balance for loan ${selectedLoan.loanId}: ${detailMsg}`);
       toast.push(`Loan ${selectedLoan.loanId} updated.`);
@@ -1450,7 +1495,7 @@ export default function AdminDashboardPage() {
         }
         return item;
       });
-      setLoans(updated);
+      setAllLoans(updated);
 
       const discardedNote = nextStatus === 'closed'
         ? ` (discarded outstanding ₹${l.outstanding.toLocaleString('en-IN')}, interest ₹${l.interestDue.toLocaleString('en-IN')})`
@@ -1501,7 +1546,7 @@ export default function AdminDashboardPage() {
           goldWeight: 15,
           goldPurity: 22,
           estimatedGoldValue: 99000,
-          branch: req.branch || 'Musthafa Nagar Branch',
+          branch: req.branch || DEFAULT_BRANCH,
           loanType: req.loanType || 'Gold Loan',
           tenureMonths: tenureMonths,
         };
@@ -1551,16 +1596,16 @@ export default function AdminDashboardPage() {
         }
 
         // Local state update: mark existing customer as Verified
-        setCustomers(prev => prev.map(c => c.id === req.userId ? { ...c, kycStatus: 'Verified' } : c));
+        setAllCustomers(prev => prev.map(c => c.id === req.userId ? { ...c, kycStatus: 'Verified' } : c));
         if (newLoan) {
-          setLoans(prev => [newLoan!, ...prev]);
+          setAllLoans(prev => [newLoan!, ...prev]);
         }
 
         const updatedReqs = accessRequests.map(r => {
           if (r.id === req.id) return { ...r, status: 'approved' as const };
           return r;
         });
-        setAccessRequests(updatedReqs);
+        setAllAccessRequests(updatedReqs);
 
         await addAuditLog('Access Request Approved', `Approved existing customer profile access/KYC verification for ${req.name}.`);
         toast.push(`Access/KYC verification approved for customer ${req.name}.`);
@@ -1637,16 +1682,16 @@ export default function AdminDashboardPage() {
 
         // Local State Update
         const updatedCusts = [newCust, ...customers];
-        setCustomers(updatedCusts);
+        setAllCustomers(updatedCusts);
         if (newLoan) {
-          setLoans(prev => [newLoan!, ...prev]);
+          setAllLoans(prev => [newLoan!, ...prev]);
         }
 
         const updatedReqs = accessRequests.map(r => {
           if (r.id === req.id) return { ...r, status: 'approved' as const };
           return r;
         });
-        setAccessRequests(updatedReqs);
+        setAllAccessRequests(updatedReqs);
 
         await addAuditLog('Access Request Approved', `Approved access for ${req.name} and auto-created customer record.`);
         toast.push(`Access approved for ${req.name}. Customer record created.`);
@@ -1673,7 +1718,7 @@ export default function AdminDashboardPage() {
         if (r.id === req.id) return { ...r, status: 'rejected' as const };
         return r;
       });
-      setAccessRequests(updatedReqs);
+      setAllAccessRequests(updatedReqs);
 
       await addAuditLog('Access Request Rejected', `Rejected access request from ${req.name}`);
       toast.push(`Access request from ${req.name} has been rejected.`);
@@ -1739,7 +1784,7 @@ export default function AdminDashboardPage() {
         });
         if (error) throw error;
       }
-      setStaffList(prev => [newStaff, ...prev]);
+      setAllStaffList(prev => [newStaff, ...prev]);
       await addAuditLog('Staff Added', `Admin added staff member ${newStaff.name} (${newStaff.mobile})`);
       toast.push(`Staff member ${newStaff.name} added successfully.`);
       setIsAddStaffOpen(false);
@@ -1766,7 +1811,7 @@ export default function AdminDashboardPage() {
         const { error } = await supabase.from('staff').update(staffUpdate).eq('id', selectedStaff.id);
         if (error) throw error;
       }
-      setStaffList(prev => prev.map(s => s.id === selectedStaff.id
+      setAllStaffList(prev => prev.map(s => s.id === selectedStaff.id
         ? { ...s, name: staffFormName, email: staffFormEmail, password: staffFormPassword.trim() ? staffFormPassword.trim() : s.password, branch: staffFormBranch }
         : s
       ));
@@ -1787,7 +1832,7 @@ export default function AdminDashboardPage() {
         const { error } = await supabase.from('staff').update({ is_active: !s.isActive }).eq('id', s.id);
         if (error) throw error;
       }
-      setStaffList(prev => prev.map(m => m.id === s.id ? { ...m, isActive: !m.isActive } : m));
+      setAllStaffList(prev => prev.map(m => m.id === s.id ? { ...m, isActive: !m.isActive } : m));
       await addAuditLog('Staff Status Changed', `${s.name} marked as ${!s.isActive ? 'Active' : 'Inactive'}`);
       toast.push(`${s.name} is now ${!s.isActive ? 'active' : 'inactive'}.`);
     } catch (err: any) {
@@ -1807,7 +1852,7 @@ export default function AdminDashboardPage() {
         const { error } = await supabase.from('staff').delete().eq('id', s.id);
         if (error) throw error;
       }
-      setStaffList(prev => prev.filter(m => m.id !== s.id));
+      setAllStaffList(prev => prev.filter(m => m.id !== s.id));
       await addAuditLog('Staff Deleted', `Admin deleted staff member ${s.name} (${s.mobile})`);
       toast.push(`Staff member ${s.name} has been deleted.`);
     } catch (err: any) {
@@ -1958,7 +2003,7 @@ export default function AdminDashboardPage() {
           // Refresh customers list
           const { data: newCusts } = await supabase.from('customers').select('*');
           if (newCusts) {
-            setCustomers(newCusts.map((c: any) => ({
+            setAllCustomers(newCusts.map((c: any) => ({
               id: c.id, name: c.name, mobile: c.mobile, email: c.email,
               address: c.address || '', dob: c.dob || '',
               kycStatus: c.kyc_status, branch: c.branch, joinedDate: c.joined_date,
@@ -1973,8 +2018,8 @@ export default function AdminDashboardPage() {
         }
       }
 
-      setLoans(prev => [newLoan, ...prev]);
-      setSanctionRequests(prev => prev.map(r => r.id === req.id
+      setAllLoans(prev => [newLoan, ...prev]);
+      setAllSanctionRequests(prev => prev.map(r => r.id === req.id
         ? { ...r, status: 'approved', reviewedBy: user?.name ?? 'Admin', adminNotes: sanctionAdminNotes }
         : r
       ));
@@ -2001,7 +2046,7 @@ export default function AdminDashboardPage() {
         }).eq('id', req.id);
         if (error) throw error;
       }
-      setSanctionRequests(prev => prev.map(r => r.id === req.id
+      setAllSanctionRequests(prev => prev.map(r => r.id === req.id
         ? { ...r, status: 'rejected', reviewedBy: user?.name ?? 'Admin', adminNotes: sanctionAdminNotes }
         : r
       ));
@@ -2025,7 +2070,7 @@ export default function AdminDashboardPage() {
         admin_note: repledgeAdminNotes,
       }).eq('id', Number(req.id));
       if (error) throw error;
-      setRepledgeRequests(prev => prev.map(r => r.id === req.id
+      setAllRepledgeRequests(prev => prev.map(r => r.id === req.id
         ? { ...r, status: 'approved', reviewedBy: user?.name ?? 'Admin', adminNotes: repledgeAdminNotes }
         : r
       ));
@@ -2049,7 +2094,7 @@ export default function AdminDashboardPage() {
         admin_note: repledgeAdminNotes,
       }).eq('id', Number(req.id));
       if (error) throw error;
-      setRepledgeRequests(prev => prev.map(r => r.id === req.id
+      setAllRepledgeRequests(prev => prev.map(r => r.id === req.id
         ? { ...r, status: 'rejected', reviewedBy: user?.name ?? 'Admin', adminNotes: repledgeAdminNotes }
         : r
       ));
@@ -2072,6 +2117,7 @@ export default function AdminDashboardPage() {
     setCustFormAddress('');
     setCustFormDob('');
     setCustFormKyc('Verified');
+    setCustFormBranch(activeBranch);
     setCustFormPassword('Cust@123');
     setCustFormJoinedDate('');
     setCustFormProcessingFee(0);
@@ -2248,7 +2294,7 @@ export default function AdminDashboardPage() {
       if (upErr) throw upErr;
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
       await supabase.from('customers').update({ avatar_url: publicUrl }).eq('id', customer.id);
-      setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, avatarUrl: publicUrl } : c));
+      setAllCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, avatarUrl: publicUrl } : c));
       toast.push(`Profile photo updated for ${customer.name}`);
     } catch {
       toast.push('Upload failed. Please check storage bucket settings.');
@@ -2344,7 +2390,7 @@ export default function AdminDashboardPage() {
                       <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">Rejected</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-[#555555]">{c.branch}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-[#555555]">{getBranch(c.branch).name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-[#555555]">{c.joinedDate}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     {showDeletedCustomers ? (
@@ -2546,7 +2592,7 @@ export default function AdminDashboardPage() {
                       <div className="text-xs text-[#555555] max-w-[200px] truncate">{r.address}</div>
                       <div className="text-xs text-[#888888]">DOB: {r.dob}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[#555555]">{r.branch}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[#555555]">{getBranch(r.branch).name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-[#555555]">{r.requestDate}</td>
                   </tr>
                 ))}
@@ -2644,7 +2690,7 @@ export default function AdminDashboardPage() {
             onChange={e => setStaffSearch(e.target.value)}
             className="w-full rounded-2xl border border-[#E5E5E5] bg-white pl-10 pr-4 py-2.5 text-sm text-text focus:border-brand focus:ring-1 focus:ring-brand" />
         </div>
-        <Button onClick={() => { setStaffFormName(''); setStaffFormMobile(''); setStaffFormEmail(''); setStaffFormPassword('Staff@123'); setStaffFormBranch('Musthafa Nagar Branch'); setIsAddStaffOpen(true); }} className="flex items-center gap-2 py-2.5 shrink-0">
+        <Button onClick={() => { setStaffFormName(''); setStaffFormMobile(''); setStaffFormEmail(''); setStaffFormPassword('Staff@123'); setStaffFormBranch(activeBranch); setIsAddStaffOpen(true); }} className="flex items-center gap-2 py-2.5 shrink-0">
           <Plus className="h-4 w-4" /> Add Staff
         </Button>
       </div>
@@ -2670,7 +2716,7 @@ export default function AdminDashboardPage() {
                     <div className="text-xs text-[#888888]">{s.email}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-text">{s.mobile}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-[#555555]">{s.branch}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-[#555555]">{getBranch(s.branch).name}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {s.isActive
                       ? <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Active</span>
@@ -2791,7 +2837,7 @@ export default function AdminDashboardPage() {
                   <tr key={r.id} className="hover:bg-surface/30">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="font-semibold text-text text-sm">{r.staffName}</div>
-                      <div className="text-xs text-[#888888]">{r.branch}</div>
+                      <div className="text-xs text-[#888888]">{getBranch(r.branch).name}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-text font-semibold flex items-center gap-1.5">
@@ -2875,10 +2921,10 @@ export default function AdminDashboardPage() {
         interest_due: 0,
       }).eq('loan_id', req.loanId);
 
-      setCloseRequests(prev => prev.map(r =>
+      setAllCloseRequests(prev => prev.map(r =>
         r.id === req.id ? { ...r, status: 'approved', adminNotes: closeAdminNotes, reviewedBy: user?.name } : r
       ));
-      setLoans(prev => prev.map(l =>
+      setAllLoans(prev => prev.map(l =>
         l.loanId === req.loanId ? { ...l, status: 'closed' as const, outstanding: 0, interestDue: 0 } : l
       ));
 
@@ -2903,7 +2949,7 @@ export default function AdminDashboardPage() {
         reviewed_at: new Date().toISOString(),
       }).eq('id', req.id);
 
-      setCloseRequests(prev => prev.map(r =>
+      setAllCloseRequests(prev => prev.map(r =>
         r.id === req.id ? { ...r, status: 'rejected', adminNotes: closeAdminNotes, reviewedBy: user?.name } : r
       ));
 
@@ -2948,10 +2994,10 @@ export default function AdminDashboardPage() {
       if (reqErr) throw reqErr;
 
       // Update state locally
-      setOutstandingEditRequests(prev => prev.map(r =>
+      setAllOutstandingEditRequests(prev => prev.map(r =>
         r.id === req.id ? { ...r, status: 'approved', adminNotes: outstandingEditAdminNotes, reviewedBy: user?.name } : r
       ));
-      setLoans(prev => prev.map(l =>
+      setAllLoans(prev => prev.map(l =>
         l.id === req.loanDbId ? { ...l, outstanding: req.newOutstanding } : l
       ));
 
@@ -2977,7 +3023,7 @@ export default function AdminDashboardPage() {
       }).eq('id', req.id);
       if (error) throw error;
 
-      setOutstandingEditRequests(prev => prev.map(r =>
+      setAllOutstandingEditRequests(prev => prev.map(r =>
         r.id === req.id ? { ...r, status: 'rejected', adminNotes: outstandingEditAdminNotes, reviewedBy: user?.name } : r
       ));
 
@@ -3554,9 +3600,17 @@ export default function AdminDashboardPage() {
             <div className="h-9 w-9 rounded-full bg-brand/10 text-brand flex items-center justify-center font-bold text-sm shrink-0">
               {user?.name?.slice(0, 2).toUpperCase() || 'AD'}
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <span className="font-semibold text-sm text-text block truncate">{user?.name ?? 'Admin'}</span>
-              <span className="text-[10px] text-[#888888] block">Musthafa Nagar Branch</span>
+              <select
+                value={activeBranch}
+                onChange={e => switchActiveBranch(e.target.value as BranchCode)}
+                className="mt-1 w-full rounded-lg border border-[#E5E5E5] bg-white px-1.5 py-1 text-[10px] font-semibold text-text focus:border-brand focus:ring-1 focus:ring-brand"
+              >
+                {BRANCH_LIST.map(b => (
+                  <option key={b.code} value={b.code}>{b.name}</option>
+                ))}
+              </select>
             </div>
           </div>
           <Button
@@ -3785,10 +3839,15 @@ export default function AdminDashboardPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">Branch</label>
-                  <Input
+                  <select
                     value={custFormBranch}
                     onChange={(e) => setCustFormBranch(e.target.value)}
-                  />
+                    className="w-full rounded-2xl border border-[#E5E5E5] bg-white px-4 py-3 text-sm text-text focus:border-brand focus:ring-1 focus:ring-brand"
+                  >
+                    {BRANCH_LIST.map(b => (
+                      <option key={b.code} value={b.code}>{b.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -3889,10 +3948,15 @@ export default function AdminDashboardPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">Branch</label>
-                  <Input
+                  <select
                     value={custFormBranch}
                     onChange={(e) => setCustFormBranch(e.target.value)}
-                  />
+                    className="w-full rounded-2xl border border-[#E5E5E5] bg-white px-4 py-3 text-sm text-text focus:border-brand focus:ring-1 focus:ring-brand"
+                  >
+                    {BRANCH_LIST.map(b => (
+                      <option key={b.code} value={b.code}>{b.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -4173,7 +4237,15 @@ export default function AdminDashboardPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">Branch</label>
-                  <Input value={staffFormBranch} onChange={e => setStaffFormBranch(e.target.value)} />
+                  <select
+                    value={staffFormBranch}
+                    onChange={e => setStaffFormBranch(e.target.value)}
+                    className="w-full rounded-2xl border border-[#E5E5E5] bg-white px-4 py-2.5 text-sm text-text focus:border-brand focus:ring-1 focus:ring-brand"
+                  >
+                    {BRANCH_LIST.map(b => (
+                      <option key={b.code} value={b.code}>{b.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="pt-4 border-t border-[#E5E5E5] flex justify-end gap-3">
@@ -4209,7 +4281,15 @@ export default function AdminDashboardPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#555555] mb-2">Branch</label>
-                  <Input value={staffFormBranch} onChange={e => setStaffFormBranch(e.target.value)} />
+                  <select
+                    value={staffFormBranch}
+                    onChange={e => setStaffFormBranch(e.target.value)}
+                    className="w-full rounded-2xl border border-[#E5E5E5] bg-white px-4 py-2.5 text-sm text-text focus:border-brand focus:ring-1 focus:ring-brand"
+                  >
+                    {BRANCH_LIST.map(b => (
+                      <option key={b.code} value={b.code}>{b.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="pt-4 border-t border-[#E5E5E5] flex justify-end gap-3">
