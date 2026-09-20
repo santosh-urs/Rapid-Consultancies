@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { calculateDynamicInterest, getTotalInterestDue, generatePaymentSchedule, addMonthsUTC, addDaysUTC, getTodayUTC, formatISODateOnly, inferTenureMonths, advanceNextDueDateFully, type MonthAdjustment, type ScheduleRow } from '@/lib/loanUtils';
 import { validateImageUpload } from '@/lib/fileUpload';
 import { BRANCH_LIST, DEFAULT_BRANCH, getBranch, type BranchCode } from '@/lib/branches';
+import { generateCustomerStatementPdf } from '@/lib/customerPdf';
 import {
   LayoutDashboard,
   Users,
@@ -69,6 +70,7 @@ interface Loan {
   startDate: string;
   maturityDate: string;
   goldWeight: number;
+  grossWeight: number;
   goldPurity: number;
   estimatedGoldValue: number;
   goldImageUrl?: string;
@@ -137,6 +139,7 @@ interface SanctionRequest {
   principal: number;
   interestRate: number;
   goldWeight: number;
+  grossWeight: number;
   goldPurity: number;
   estimatedGoldValue: number;
   tenureMonths: number;
@@ -388,6 +391,8 @@ export default function AdminDashboardPage() {
   const [loanFormPrincipal, setLoanFormPrincipal] = useState(100000);
   const [loanFormInterestRate, setLoanFormInterestRate] = useState(9.5);
   const [loanFormGoldWeight, setLoanFormGoldWeight] = useState(15);
+  // Gross weight = full ornament weight incl. stones/fastenings; gold weight is the net.
+  const [loanFormGrossWeight, setLoanFormGrossWeight] = useState(15);
   const [loanFormGoldPurity, setLoanFormGoldPurity] = useState(22);
   const [loanFormEstimatedGoldValue, setLoanFormEstimatedGoldValue] = useState(99000);
   const [isLoanFormEstimatedGoldValueManuallyEdited, setIsLoanFormEstimatedGoldValueManuallyEdited] = useState(false);
@@ -425,7 +430,6 @@ export default function AdminDashboardPage() {
   const [isAddingCharge, setIsAddingCharge] = useState(false);
 
   const generateCustomerPdf = async (customer: Customer, loan: Loan | null) => {
-    const branchInfo = getBranch(customer.branch);
     // Use customer-level processing fee (editable by admin); fall back to sanction request lookup
     const matchedSanction = loan
       ? sanctionRequests.find(
@@ -437,109 +441,11 @@ export default function AdminDashboardPage() {
     const processingFee = (customer.processingFee && customer.processingFee > 0)
       ? customer.processingFee
       : (matchedSanction?.processingFee ?? 0);
-    // If sanction has 0 interestAmount (old loan), fall back to calculated value
-    const interestAmount = (matchedSanction?.interestAmount && matchedSanction.interestAmount > 0)
-      ? matchedSanction.interestAmount
-      : (loan ? Math.round(loan.principal * (loan.interestRate / 100) * (loan.tenureMonths / 12)) : 0);
-
-    const row = (label: string, value: string, highlight = false) =>
-      `<tr${highlight ? ' class="highlight"' : ''}>
-        <td>${label}</td>
-        <td>${value}</td>
-      </tr>`;
-
-    const loanSection = loan ? `
-      <h3 style="font-size:13px;font-weight:700;color:#282828;margin:20px 0 4px;">Loan Details</h3>
-      <hr style="border:none;border-top:2px solid #b40000;margin-bottom:8px;"/>
-      <table style="width:100%;border-collapse:collapse;font-size:12px;">
-        ${row('Loan ID', loan.loanId)}
-        ${row('Loan Type', loan.loanType)}
-        ${row('Status', loan.status.charAt(0).toUpperCase() + loan.status.slice(1))}
-        ${row('Principal Amount', `Rs. ${loan.principal.toLocaleString('en-IN')}`)}
-        ${row('Processing Fee', processingFee > 0 ? `Rs. ${processingFee.toLocaleString('en-IN')}` : 'Nil')}
-        ${row('Outstanding Balance', `Rs. ${loan.outstanding.toLocaleString('en-IN')}`)}
-        ${row('Interest Amount (Estimated)', `Rs. ${interestAmount.toLocaleString('en-IN')}`)}
-        ${row('Interest Due (Accrued)', `Rs. ${loan.interestDue.toLocaleString('en-IN')}`)}
-        ${row('Total Due', `Rs. ${(loan.outstanding + loan.interestDue).toLocaleString('en-IN')}`, true)}
-        ${row('Interest Rate', `${loan.interestRate}% p.a.`)}
-        ${row('Tenure', `${loan.tenureMonths} months`)}
-        ${row('Start Date', loan.startDate || 'N/A')}
-        ${row('Maturity Date', loan.maturityDate || 'N/A')}
-        ${row('Next Due Date', loan.nextDueDate || 'N/A')}
-        ${(loan.loanType === 'Gold Loan' || loan.goldWeight > 0) ? `
-          ${row('Gold Weight', `${loan.goldWeight} g`)}
-          ${row('Gold Purity', `${loan.goldPurity}K`)}
-          ${row('Est. Gold Value', `Rs. ${loan.estimatedGoldValue?.toLocaleString('en-IN') || 'N/A'}`)}
-        ` : ''}
-      </table>
-    ` : '';
-
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Customer Statement – ${customer.name}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&family=Noto+Sans+Telugu:wght@400;600;700&display=swap" rel="stylesheet"/>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    body { font-family: 'Noto Sans', 'Noto Sans Telugu', Arial, sans-serif; color: #282828; background: #fff; padding: 0; }
-    @media print {
-      body { padding: 0; }
-      .no-print { display: none !important; }
-      @page { margin: 10mm; size: A4; }
-    }
-    .header { background: #b40000 !important; color: #fff !important; text-align: center; padding: 18px 16px 14px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .header h1 { font-size: 22px; font-weight: 700; letter-spacing: 1px; color: #fff !important; }
-    .header p { font-size: 10px; margin-top: 4px; opacity: 0.9; color: #fff !important; }
-    .header hr { border: none; border-top: 1px solid rgba(255,255,255,0.5); margin: 8px 0 6px; }
-    .header .subtitle { font-size: 11px; color: #fff !important; }
-    .content { padding: 20px 24px 60px; max-width: 700px; margin: 0 auto; }
-    h3 { font-size: 13px; font-weight: 700; color: #282828; margin: 20px 0 4px; }
-    hr.section { border: none; border-top: 2px solid #b40000 !important; margin-bottom: 8px; }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    td { padding: 7px 10px; border: 1px solid #ddd !important; }
-    td:first-child { font-weight: 600; width: 45%; background: #f9f9f9 !important; color: #555 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .highlight td:last-child { font-weight: 700; color: #b40000 !important; }
-    .footer { text-align: center; font-size: 9px; color: #999; margin-top: 32px; border-top: 1px solid #eee; padding-top: 10px; }
-    .print-btn { display: block; margin: 20px auto; padding: 10px 28px; background: #b40000; color: #fff; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; font-family: inherit; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>RAPID CONSULTANCY</h1>
-    <p>${branchInfo.name} &nbsp;|&nbsp; ${branchInfo.address}</p>
-    <p>${branchInfo.email} &nbsp;|&nbsp; ${branchInfo.phone}</p>
-    <hr/>
-    <span class="subtitle">Customer Statement</span>
-  </div>
-  <div class="content">
-    <button class="print-btn no-print" onclick="window.print()">Print / Save as PDF</button>
-    <h3>Customer Information</h3>
-    <hr class="section"/>
-    <table>
-      ${row('Name', customer.name)}
-      ${row('Date of Birth', customer.dob || 'N/A')}
-      ${row('Mobile', customer.mobile)}
-      ${row('Email', customer.email)}
-      ${row('Address', customer.address || 'N/A')}
-      ${row('Branch', branchInfo.name)}
-      ${row('KYC Status', customer.kycStatus)}
-      ${row('Joined Date', customer.joinedDate || 'N/A')}
-      ${processingFee > 0 ? row('Processing Fee', `Rs. ${processingFee.toLocaleString('en-IN')}`) : ''}
-    </table>
-    ${loanSection}
-    <div class="footer">
-      Generated on ${new Date().toLocaleString('en-IN')} &nbsp;|&nbsp; ${branchInfo.name} &nbsp;|&nbsp; ${branchInfo.email}
-    </div>
-  </div>
-</body>
-</html>`;
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    printWindow.document.write(html);
-    printWindow.document.close();
+    generateCustomerStatementPdf(customer, loan, {
+      processingFee,
+      // If sanction has 0 interestAmount (old loan), the helper falls back to a calculated value
+      interestAmount: matchedSanction?.interestAmount,
+    });
   };
 
   const handleDownloadPdfClick = (customer: Customer) => {
@@ -664,6 +570,7 @@ export default function AdminDashboardPage() {
           startDate: l.start_date,
           maturityDate: l.maturity_date,
           goldWeight,
+          grossWeight: Number(l.gross_weight || 0),
           goldPurity: Number(l.gold_purity),
           estimatedGoldValue: Number(l.estimated_gold_value),
           goldImageUrl: l.gold_image_url || '',
@@ -724,7 +631,8 @@ export default function AdminDashboardPage() {
             businessType: meta.businessType,
             businessYears: meta.businessYears,
             principal: Number(s.principal), interestRate: Number(s.interest_rate),
-            goldWeight: Number(s.gold_weight), goldPurity: Number(s.gold_purity),
+            goldWeight: Number(s.gold_weight), grossWeight: Number(s.gross_weight || 0),
+            goldPurity: Number(s.gold_purity),
             estimatedGoldValue: Number(s.estimated_gold_value), tenureMonths: Number(s.tenure_months),
             branch: s.branch, notes: meta.userNotes, loanType: meta.loanType,
             requestedDueDate: meta.dueDate, status: s.status,
@@ -1208,6 +1116,7 @@ export default function AdminDashboardPage() {
       maturityDate: maturityDate.toISOString().split('T')[0],
       nextDueDate: nextDueDateStr,
       goldWeight: loanFormLoanType === 'Weekly Loan' ? 0 : loanFormGoldWeight,
+      grossWeight: loanFormLoanType === 'Gold Loan' ? loanFormGrossWeight : 0,
       goldPurity: loanFormLoanType === 'Weekly Loan' ? 0 : loanFormGoldPurity,
       estimatedGoldValue: loanFormLoanType === 'Weekly Loan' ? 0 : loanFormEstimatedGoldValue,
       branch: cust.branch || DEFAULT_BRANCH,
@@ -1237,6 +1146,7 @@ export default function AdminDashboardPage() {
             maturity_date: newLoan.maturityDate,
             next_due_date: newLoan.nextDueDate,
             gold_weight: newLoan.goldWeight,
+            gross_weight: newLoan.grossWeight,
             gold_purity: newLoan.goldPurity,
             estimated_gold_value: newLoan.estimatedGoldValue,
             branch: newLoan.branch,
@@ -1560,6 +1470,7 @@ export default function AdminDashboardPage() {
           maturityDate: maturityDate.toISOString().split('T')[0],
           nextDueDate: nextDueDate.toISOString().split('T')[0],
           goldWeight: 15,
+          grossWeight: 0,
           goldPurity: 22,
           estimatedGoldValue: 99000,
           branch: req.branch || DEFAULT_BRANCH,
@@ -1596,6 +1507,7 @@ export default function AdminDashboardPage() {
                 maturity_date: newLoan.maturityDate,
                 next_due_date: newLoan.nextDueDate,
                 gold_weight: newLoan.goldWeight,
+            gross_weight: newLoan.grossWeight,
                 gold_purity: newLoan.goldPurity,
                 estimated_gold_value: newLoan.estimatedGoldValue,
                 branch: newLoan.branch,
@@ -1681,6 +1593,7 @@ export default function AdminDashboardPage() {
                 maturity_date: newLoan.maturityDate,
                 next_due_date: newLoan.nextDueDate,
                 gold_weight: newLoan.goldWeight,
+            gross_weight: newLoan.grossWeight,
                 gold_purity: newLoan.goldPurity,
                 estimated_gold_value: newLoan.estimatedGoldValue,
                 branch: newLoan.branch,
@@ -1914,6 +1827,7 @@ export default function AdminDashboardPage() {
       maturityDate: maturityDate.toISOString().split('T')[0],
       nextDueDate: sanctionNextDue,
       goldWeight: req.goldWeight,
+      grossWeight: req.grossWeight,
       goldPurity: req.goldPurity,
       estimatedGoldValue: req.estimatedGoldValue,
       branch: req.branch,
@@ -2000,6 +1914,7 @@ export default function AdminDashboardPage() {
               maturity_date: newLoan.maturityDate,
               next_due_date: newLoan.nextDueDate,
               gold_weight: newLoan.goldWeight,
+            gross_weight: newLoan.grossWeight,
               gold_purity: newLoan.goldPurity,
               estimated_gold_value: newLoan.estimatedGoldValue,
               branch: newLoan.branch,
@@ -2147,6 +2062,7 @@ export default function AdminDashboardPage() {
     setLoanFormPrincipal(100000);
     setLoanFormInterestRate(9.5);
     setLoanFormGoldWeight(15);
+    setLoanFormGrossWeight(15);
     setLoanFormGoldPurity(22);
     setLoanFormEstimatedGoldValue(99000);
     setIsLoanFormEstimatedGoldValueManuallyEdited(false);
@@ -2500,7 +2416,7 @@ export default function AdminDashboardPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-text text-sm">₹{l.principal.toLocaleString('en-IN')}</div>
-                    <div className="text-xs text-[#888888]">Gold: {l.goldWeight}g ({l.goldPurity}K) - Est. ₹{l.estimatedGoldValue?.toLocaleString('en-IN')}</div>
+                    <div className="text-xs text-[#888888]">Gold: {l.goldWeight}g ({l.goldPurity}K){l.grossWeight > 0 ? ` · Gross ${l.grossWeight}g` : ''} - Est. ₹{l.estimatedGoldValue?.toLocaleString('en-IN')}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-rose-600 font-semibold text-sm">₹{(l.outstanding + l.interestDue).toLocaleString('en-IN')}</div>
@@ -2874,6 +2790,7 @@ export default function AdminDashboardPage() {
                       {r.loanType === 'Gold Loan' ? (
                         <>
                           <div className="text-sm text-text">{r.goldWeight}g · {r.goldPurity}K</div>
+                          {r.grossWeight > 0 && <div className="text-xs text-[#888888]">Gross {r.grossWeight}g</div>}
                           <div className="text-xs text-[#888888]">Est. ₹{r.estimatedGoldValue.toLocaleString('en-IN')}</div>
                         </>
                       ) : r.loanType === 'Business Loan' ? (
@@ -4166,7 +4083,18 @@ export default function AdminDashboardPage() {
               </div>
 
               {loanFormLoanType === 'Gold Loan' && (
-                <div className="bg-slate-50 p-4 rounded-2xl border border-[#E5E5E5] grid gap-4 sm:grid-cols-3">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-[#E5E5E5] grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[#555555] mb-1.5 flex items-center gap-1"><Calculator className="h-3.5 w-3.5" /> Gross Weight (grams)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={loanFormGrossWeight}
+                      onChange={(e) => setLoanFormGrossWeight(Number(e.target.value))}
+                    />
+                    <p className="mt-1 text-[10px] text-[#888888]">Total ornament weight (incl. stones)</p>
+                  </div>
                   <div>
                     <label className="block text-xs font-bold text-[#555555] mb-1.5 flex items-center gap-1"><Calculator className="h-3.5 w-3.5" /> Gold Weight (grams)</label>
                     <Input
@@ -4389,8 +4317,11 @@ export default function AdminDashboardPage() {
                 <div className="flex justify-between"><span className="text-[#888888]">Interest Rate:</span><span className="font-semibold">{selectedSanction.interestRate}% p.a.</span></div>
                 <div className="flex justify-between"><span className="text-[#888888]">Tenure:</span><span className="font-semibold">{selectedSanction.tenureMonths} months</span></div>
                 {selectedSanction.requestedDueDate && <div className="flex justify-between"><span className="text-[#888888]">Requested Due Date:</span><span className="font-semibold">{selectedSanction.requestedDueDate}</span></div>}
+                {selectedSanction.loanType === 'Gold Loan' && selectedSanction.grossWeight > 0 && (
+                  <div className="flex justify-between"><span className="text-[#888888]">Gross Weight:</span><span className="font-semibold">{selectedSanction.grossWeight}g</span></div>
+                )}
                 {selectedSanction.loanType === 'Gold Loan' && (
-                  <div className="flex justify-between"><span className="text-[#888888]">Gold:</span><span className="font-semibold">{selectedSanction.goldWeight}g · {selectedSanction.goldPurity}K · Est. ₹{selectedSanction.estimatedGoldValue.toLocaleString('en-IN')}</span></div>
+                  <div className="flex justify-between"><span className="text-[#888888]">Gold (Net):</span><span className="font-semibold">{selectedSanction.goldWeight}g · {selectedSanction.goldPurity}K · Est. ₹{selectedSanction.estimatedGoldValue.toLocaleString('en-IN')}</span></div>
                 )}
                 {selectedSanction.loanType === 'Gold Loan' && selectedSanction.estimatedGoldValue > 0 && (
                   <div className="flex justify-between"><span className="text-[#888888]">LTV:</span><span className="font-bold text-text">{(selectedSanction.principal / selectedSanction.estimatedGoldValue * 100).toFixed(1)}%</span></div>
@@ -4668,6 +4599,10 @@ export default function AdminDashboardPage() {
                       <span className="h-3.5 w-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin inline-block" />
                     )}
                   </div>
+                  <p className="mb-3 text-xs text-[#555555]">
+                    {selectedLoan.grossWeight > 0 && <>Gross: <span className="font-semibold">{selectedLoan.grossWeight}g</span> · </>}
+                    Net: <span className="font-semibold">{selectedLoan.goldWeight}g</span> · Purity: <span className="font-semibold">{selectedLoan.goldPurity}K</span>
+                  </p>
                   <div className="flex items-start gap-4">
                     {selectedLoan.goldImageUrl ? (
                       <img src={selectedLoan.goldImageUrl} alt="Gold" className="h-24 w-36 object-cover rounded-xl border border-amber-200 shrink-0" />

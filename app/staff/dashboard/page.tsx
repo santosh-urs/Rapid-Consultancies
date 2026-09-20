@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/Toast';
 import { supabase } from '@/lib/supabase';
 import { validateImageUpload } from '@/lib/fileUpload';
 import { BRANCH_LIST, DEFAULT_BRANCH, getBranch, type BranchCode } from '@/lib/branches';
+import { generateCustomerStatementPdf } from '@/lib/customerPdf';
 import {
   calculateDynamicInterest,
   getTotalInterestDue,
@@ -40,6 +41,7 @@ import {
   ChevronDown,
   ChevronUp,
   XCircle,
+  Download,
 } from 'lucide-react';
 
 interface Customer {
@@ -53,6 +55,7 @@ interface Customer {
   branch: string;
   joinedDate: string;
   password?: string;
+  processingFee?: number;
 }
 
 interface Loan {
@@ -69,6 +72,7 @@ interface Loan {
   startDate: string;
   maturityDate: string;
   goldWeight: number;
+  grossWeight: number;
   goldPurity: number;
   estimatedGoldValue: number;
   goldImageUrl?: string;
@@ -93,6 +97,7 @@ interface SanctionRequest {
   principal: number;
   interestRate: number;
   goldWeight: number;
+  grossWeight: number;
   goldPurity: number;
   estimatedGoldValue: number;
   tenureMonths: number;
@@ -309,6 +314,11 @@ export default function StaffDashboardPage() {
   const [closeReason, setCloseReason] = useState('');
   const [uploadingGoldPhotoId, setUploadingGoldPhotoId] = useState<string | null>(null);
 
+  // Customer statement download — modal shown when a customer has multiple active loans
+  const [isPdfLoanSelectOpen, setIsPdfLoanSelectOpen] = useState(false);
+  const [pdfCustomer, setPdfCustomer] = useState<Customer | null>(null);
+  const [pdfCustomerLoans, setPdfCustomerLoans] = useState<Loan[]>([]);
+
   // Sanction request form — new customer details
   const [sanctionCustomerType, setSanctionCustomerType] = useState<'new' | 'existing'>('new');
   const [sanctionSelectedCustomerId, setSanctionSelectedCustomerId] = useState('');
@@ -321,6 +331,9 @@ export default function StaffDashboardPage() {
   const [sanctionPrincipal, setSanctionPrincipal] = useState(100000);
   const [sanctionInterestRate, setSanctionInterestRate] = useState(9.5);
   const [sanctionGoldWeight, setSanctionGoldWeight] = useState(15);
+  // Gross weight = full ornament weight incl. stones/fastenings. Net (gold) weight
+  // is what the valuation uses, so gross is captured separately for the pledge record.
+  const [sanctionGrossWeight, setSanctionGrossWeight] = useState(15);
   const [sanctionGoldPurity, setSanctionGoldPurity] = useState<18 | 22 | 24>(22);
   const [sanctionGoldRate, setSanctionGoldRate] = useState(6600);
   const [sanctionEstimatedGoldValue, setSanctionEstimatedGoldValue] = useState(99000);
@@ -415,6 +428,7 @@ export default function StaffDashboardPage() {
           branch: c.branch,
           joinedDate: c.joined_date,
           password: c.password || '',
+          processingFee: Number(c.processing_fee ?? 0),
         })).sort((a: any, b: any) => parseDateUTC(b.joinedDate).getTime() - parseDateUTC(a.joinedDate).getTime()));
 
         setAllLoans((loanRes.data || []).map((l: any) => {
@@ -442,6 +456,7 @@ export default function StaffDashboardPage() {
             startDate: l.start_date,
             maturityDate: l.maturity_date,
             goldWeight,
+            grossWeight: Number(l.gross_weight || 0),
             goldPurity: Number(l.gold_purity),
             estimatedGoldValue: Number(l.estimated_gold_value),
             goldImageUrl: l.gold_image_url || '',
@@ -470,6 +485,7 @@ export default function StaffDashboardPage() {
               principal: Number(s.principal),
               interestRate: Number(s.interest_rate),
               goldWeight: Number(s.gold_weight),
+              grossWeight: Number(s.gross_weight || 0),
               goldPurity: Number(s.gold_purity),
               estimatedGoldValue: Number(s.estimated_gold_value),
               tenureMonths: Number(s.tenure_months),
@@ -481,6 +497,8 @@ export default function StaffDashboardPage() {
               requestedDate: s.requested_date,
               reviewedBy: s.reviewed_by || '',
               adminNotes: s.admin_notes || '',
+              processingFee: meta.processingFee,
+              interestAmount: meta.interestAmount,
             };
           }));
         }
@@ -854,6 +872,39 @@ export default function StaffDashboardPage() {
     }
   };
 
+  // --- Customer statement download (same document the admin generates) ---
+  const generateCustomerPdf = (customer: Customer, loan: Loan | null) => {
+    const matchedSanction = loan
+      ? allSanctionRequests.find(
+          s => s.status === 'approved' &&
+            (s.customerId === customer.id || s.customerName === customer.name) &&
+            s.principal === loan.principal
+        )
+      : null;
+    const processingFee = (customer.processingFee && customer.processingFee > 0)
+      ? customer.processingFee
+      : (matchedSanction?.processingFee ?? 0);
+    generateCustomerStatementPdf(customer, loan, {
+      processingFee,
+      interestAmount: matchedSanction?.interestAmount,
+    });
+  };
+
+  const handleDownloadPdfClick = (customer: Customer) => {
+    const activeLoans = loans.filter(
+      l => l.customerId === customer.id && (l.status === 'active' || l.status === 'overdue'),
+    );
+    if (activeLoans.length === 0) {
+      generateCustomerPdf(customer, null);
+    } else if (activeLoans.length === 1) {
+      generateCustomerPdf(customer, activeLoans[0]);
+    } else {
+      setPdfCustomer(customer);
+      setPdfCustomerLoans(activeLoans);
+      setIsPdfLoanSelectOpen(true);
+    }
+  };
+
   const maxEligibleLoan = useMemo(() => {
     return Math.floor(sanctionEstimatedGoldValue * 0.75);
   }, [sanctionEstimatedGoldValue]);
@@ -872,6 +923,16 @@ export default function StaffDashboardPage() {
     if (sanctionLoanType === 'Weekly Loan') {
       if (sanctionPrincipal < 10000 || sanctionPrincipal > 100000) {
         toast.push('Weekly Loan principal must be between ₹10,000 and ₹1,00,000.');
+        return;
+      }
+    }
+    if (sanctionLoanType === 'Gold Loan') {
+      if (!sanctionGrossWeight || sanctionGrossWeight <= 0) {
+        toast.push('Please enter the gross weight of the gold.');
+        return;
+      }
+      if (sanctionGrossWeight < sanctionGoldWeight) {
+        toast.push('Gross weight cannot be less than the net gold weight.');
         return;
       }
     }
@@ -915,6 +976,7 @@ export default function StaffDashboardPage() {
       principal: sanctionPrincipal,
       interestRate: sanctionInterestRate,
       goldWeight: sanctionLoanType === 'Weekly Loan' ? 0 : sanctionGoldWeight,
+      grossWeight: sanctionLoanType === 'Gold Loan' ? sanctionGrossWeight : 0,
       goldPurity: sanctionLoanType === 'Weekly Loan' ? 0 : sanctionGoldPurity,
       estimatedGoldValue: sanctionLoanType === 'Weekly Loan' ? 0 : sanctionEstimatedGoldValue,
       tenureMonths: sanctionTenure,
@@ -941,6 +1003,7 @@ export default function StaffDashboardPage() {
           principal: newRequest.principal,
           interest_rate: newRequest.interestRate,
           gold_weight: newRequest.goldWeight,
+          gross_weight: newRequest.grossWeight,
           gold_purity: newRequest.goldPurity,
           estimated_gold_value: newRequest.estimatedGoldValue,
           tenure_months: newRequest.tenureMonths,
@@ -966,6 +1029,7 @@ export default function StaffDashboardPage() {
       setSanctionPrincipal(100000);
       setSanctionInterestRate(9.5);
       setSanctionGoldWeight(15);
+      setSanctionGrossWeight(15);
       setSanctionGoldPurity(22);
       setSanctionEstimatedGoldValue(99000);
       setIsEstimatedGoldValueManuallyEdited(false);
@@ -1201,9 +1265,19 @@ export default function StaffDashboardPage() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-text">{getBranch(c.branch).name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-[#888888]">{c.joinedDate}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <Button variant="ghost" className="text-xs py-1 px-3 gap-1" onClick={() => handleEditCustomerClick(c)}>
-                      <Edit className="h-3 w-3" /> Edit
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" className="text-xs py-1 px-3 gap-1" onClick={() => handleEditCustomerClick(c)}>
+                        <Edit className="h-3 w-3" /> Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="text-xs py-1 px-3 gap-1 text-emerald-600 hover:bg-emerald-50"
+                        onClick={() => handleDownloadPdfClick(c)}
+                        title="Download customer statement"
+                      >
+                        <Download className="h-3 w-3" /> Download
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1575,7 +1649,22 @@ export default function StaffDashboardPage() {
 
           {/* ── Gold Loan Fields ── */}
           {sanctionLoanType === 'Gold Loan' && (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-text">Gross Weight (g) <span className="text-red-500">*</span></label>
+                <Input
+                  type="number"
+                  value={sanctionGrossWeight}
+                  onChange={e => setSanctionGrossWeight(Number(e.target.value))}
+                  min={0.1}
+                  step={0.01}
+                  required
+                />
+                <p className="mt-1 text-[10px] text-[#888888]">Total ornament weight (incl. stones)</p>
+                {sanctionGrossWeight > 0 && sanctionGrossWeight < sanctionGoldWeight && (
+                  <p className="mt-1 text-xs font-medium text-red-600">⚠ Cannot be less than net gold weight.</p>
+                )}
+              </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-text">Gold Weight (g)</label>
                 <Input
@@ -1586,6 +1675,7 @@ export default function StaffDashboardPage() {
                   step={0.01}
                   required
                 />
+                <p className="mt-1 text-[10px] text-[#888888]">Net weight used for valuation</p>
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-text">Gold Purity (K)</label>
@@ -1796,6 +1886,7 @@ export default function StaffDashboardPage() {
                       {r.loanType && <span className="font-medium text-brand">{r.loanType} · </span>}
                       ₹{r.principal.toLocaleString('en-IN')} · {r.tenureMonths} months
                       {r.loanType === 'Gold Loan' && r.goldWeight > 0 && ` · ${r.goldWeight}g ${r.goldPurity}K`}
+                      {r.loanType === 'Gold Loan' && r.grossWeight > 0 && ` · Gross ${r.grossWeight}g`}
                     </div>
                     <div className="text-xs text-[#888888]">
                       Submitted: {new Date(r.requestedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -2052,6 +2143,49 @@ export default function StaffDashboardPage() {
         </main>
       </div>
 
+      {/* Customer Statement — loan picker (only when several loans are active) */}
+      {isPdfLoanSelectOpen && pdfCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white shadow-[0_32px_64px_-12px_rgba(0,0,0,0.25),0_8px_24px_-4px_rgba(0,0,0,0.12)] ring-1 ring-black/5 overflow-hidden">
+            <div className="flex justify-between items-center px-6 py-5 border-b border-[#E5E5E5]">
+              <div>
+                <h2 className="text-lg font-bold text-text">Download Customer Statement</h2>
+                <p className="text-xs text-[#888888] mt-0.5">{pdfCustomer.name} has multiple active loans. Select one to include.</p>
+              </div>
+              <button onClick={() => setIsPdfLoanSelectOpen(false)} className="p-2 rounded-xl hover:bg-surface text-[#888888]">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-3">
+              {pdfCustomerLoans.map(loan => (
+                <button
+                  key={loan.id}
+                  onClick={() => {
+                    generateCustomerPdf(pdfCustomer, loan);
+                    setIsPdfLoanSelectOpen(false);
+                  }}
+                  className="w-full text-left rounded-2xl border border-[#E5E5E5] px-4 py-3 hover:border-brand hover:bg-red-50 transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-mono text-xs font-semibold bg-[#F0F0F0] px-2 py-0.5 rounded text-text">{loan.loanId}</span>
+                      <span className="ml-2 text-sm font-semibold text-text">{loan.loanType}</span>
+                    </div>
+                    {statusBadge(loan.status)}
+                  </div>
+                  <div className="mt-1 text-xs text-[#555555]">
+                    Principal: ₹{loan.principal.toLocaleString('en-IN')} &nbsp;·&nbsp; Outstanding: ₹{(loan.outstanding + loan.interestDue).toLocaleString('en-IN')}
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div className="px-6 pb-5 flex justify-end">
+              <Button variant="outline" onClick={() => setIsPdfLoanSelectOpen(false)}>Cancel</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add Customer Modal */}
       {isAddCustomerOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/40 p-4">
@@ -2296,6 +2430,10 @@ export default function StaffDashboardPage() {
                       <span className="h-3.5 w-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin inline-block" />
                     )}
                   </div>
+                  <p className="mb-3 text-xs text-[#555555]">
+                    {selectedLoan.grossWeight > 0 && <>Gross: <span className="font-semibold">{selectedLoan.grossWeight}g</span> · </>}
+                    Net: <span className="font-semibold">{selectedLoan.goldWeight}g</span> · Purity: <span className="font-semibold">{selectedLoan.goldPurity}K</span> · Est. value: <span className="font-semibold">₹{selectedLoan.estimatedGoldValue?.toLocaleString('en-IN')}</span>
+                  </p>
                   <div className="flex items-start gap-4">
                     {selectedLoan.goldImageUrl ? (
                       <img src={selectedLoan.goldImageUrl} alt="Gold" className="h-28 w-44 object-cover rounded-xl border border-amber-200" />

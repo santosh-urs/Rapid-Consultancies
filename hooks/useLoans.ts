@@ -41,6 +41,8 @@ export interface LoanSummary {
   startDate: string;
   maturityDate: string;
   goldWeight: number;
+  /** Full ornament weight incl. stones; 0 when not recorded. */
+  grossWeight: number;
   goldPurity: number;
   estimatedGoldValue: number;
   goldImageUrl?: string;
@@ -183,6 +185,7 @@ export function useLoans() {
             startDate: l.start_date,
             maturityDate: l.maturity_date,
             goldWeight,
+            grossWeight: Number(l.gross_weight || 0),
             goldPurity: Number(l.gold_purity),
             estimatedGoldValue: Number(l.estimated_gold_value),
             goldImageUrl: l.gold_image_url || '',
@@ -283,6 +286,7 @@ export function useLoanDetail(loanId: string) {
             startDate: l.start_date,
             maturityDate: l.maturity_date,
             goldWeight,
+            grossWeight: Number(l.gross_weight || 0),
             goldPurity: Number(l.gold_purity),
             estimatedGoldValue: Number(l.estimated_gold_value),
             goldImageUrl: l.gold_image_url || '',

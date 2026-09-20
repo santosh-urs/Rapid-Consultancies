@@ -39,10 +39,14 @@ CREATE TABLE IF NOT EXISTS loans (
     start_date DATE NOT NULL,
     maturity_date DATE NOT NULL,
     gold_weight NUMERIC NOT NULL,
+    -- Gross weight = full ornament weight incl. stones/fastenings; gold_weight is the net.
+    gross_weight NUMERIC DEFAULT 0,
     gold_purity NUMERIC NOT NULL,
     estimated_gold_value NUMERIC NOT NULL,
     branch TEXT DEFAULT 'Musthafa Nagar Branch'
 );
+-- Migration for existing databases:
+-- ALTER TABLE loans ADD COLUMN IF NOT EXISTS gross_weight NUMERIC DEFAULT 0;
 
 -- 3. Access Requests Table
 CREATE TABLE IF NOT EXISTS access_requests (
@@ -142,6 +146,8 @@ CREATE TABLE IF NOT EXISTS loan_sanction_requests (
     principal NUMERIC NOT NULL,
     interest_rate NUMERIC NOT NULL DEFAULT 9.5,
     gold_weight NUMERIC NOT NULL,
+    -- Gross weight = full ornament weight incl. stones/fastenings; gold_weight is the net.
+    gross_weight NUMERIC DEFAULT 0,
     gold_purity NUMERIC NOT NULL,
     estimated_gold_value NUMERIC NOT NULL,
     tenure_months INTEGER NOT NULL DEFAULT 6,

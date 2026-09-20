@@ -120,9 +120,10 @@ export default function LoanDetailPage() {
                 <Shield size={16} className="text-brand" />
                 <span className="text-xs font-bold uppercase tracking-wider text-[#888888]">Gold Collateral</span>
               </div>
-              <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="grid grid-cols-2 gap-3 mb-4 sm:grid-cols-4">
                 {[
-                  { label: 'Gold Weight', value: `${data.goldWeight} grams` },
+                  ...(data.grossWeight > 0 ? [{ label: 'Gross Weight', value: `${data.grossWeight} grams` }] : []),
+                  { label: 'Gold Weight (Net)', value: `${data.goldWeight} grams` },
                   { label: 'Gold Purity', value: `${data.goldPurity} Karat` },
                   { label: 'Estimated Value', value: `₹${data.estimatedGoldValue.toLocaleString('en-IN')}` },
                 ].map(({ label, value }) => (

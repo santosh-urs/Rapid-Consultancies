@@ -335,7 +335,7 @@ export default function DashboardPage() {
                 {/* Info row */}
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#555555] pb-2">
                   {loan.loanType === 'Gold Loan' && loan.goldWeight > 0 && (
-                    <span>Gold: <strong className="text-text">{loan.goldWeight}g · {loan.goldPurity}K</strong></span>
+                    <span>Gold: <strong className="text-text">{loan.goldWeight}g · {loan.goldPurity}K{loan.grossWeight > 0 ? ` · Gross ${loan.grossWeight}g` : ''}</strong></span>
                   )}
                   <span>Rate: <strong className="text-text">{loan.interestRate}%{loan.loanType === 'Weekly Loan' ? ' Flat' : ' p.a.'}</strong></span>
                   <span>Tenure: <strong className="text-text">{loan.loanType === 'Weekly Loan' ? '1 month (4 weeks)' : `${loan.tenureMonths} months`}</strong></span>
